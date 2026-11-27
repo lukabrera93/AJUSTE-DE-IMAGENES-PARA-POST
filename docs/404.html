@@ -21,25 +21,57 @@
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&family=Lora:ital,wght@0,400;0,600;1,400&family=Oswald:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-u7ZCCrdD.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DmOaxawG.css">
+    <script type="module" crossorigin src="./assets/index-YD9FkIM7.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CNkfwDCp.css">
   </head>
   <body class="bg-neutral-50 text-neutral-900 dark:bg-[#0B0D10] dark:text-neutral-100 antialiased selection:bg-blue-600/20 selection:text-blue-500">
     <div id="root"></div>
     <script>
-      window.addEventListener("DOMContentLoaded", function () {
+      (function () {
         var rawEntry = document.querySelector('script[src="/src/main.tsx"]');
         if (!rawEntry) return;
-        setTimeout(function () {
-          if (!window.__RETICULA_MOUNTED__) {
-            fetch("./docs/index.html", { method: "HEAD" })
-              .then(function (res) {
-                if (res.ok) window.location.replace("./docs/");
-              })
-              .catch(function () {});
-          }
-        }, 1200);
-      });
+
+        var checked = false;
+        function tryDocsFallback() {
+          if (checked || window.__RETICULA_MOUNTED__) return;
+          checked = true;
+
+          var p = window.location.pathname || "/";
+          var dir = p.endsWith("/")
+            ? p
+            : p.endsWith(".html")
+            ? p.replace(/[^/]+$/, "")
+            : p + "/";
+          var docsUrl = dir + "docs/";
+
+          fetch(docsUrl + "index.html", { method: "GET" })
+            .then(function (res) {
+              if (res.ok) {
+                window.location.replace(docsUrl);
+              } else {
+                showBuildNotice();
+              }
+            })
+            .catch(showBuildNotice);
+        }
+
+        function showBuildNotice() {
+          if (window.__RETICULA_MOUNTED__) return;
+          var root = document.getElementById("root");
+          if (!root || root.innerHTML.trim().length > 0) return;
+          root.innerHTML =
+            '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0B0D10;color:#F3F4F6;font-family:system-ui,sans-serif;">' +
+            '<div style="max-width:460px;padding:24px;border:1px solid #262A33;border-radius:16px;background:#111419;">' +
+            '<h1 style="margin:0 0 8px;font-size:16px;font-weight:600;">Retícula Studio — Publicación en GitHub Pages</h1>' +
+            '<p style="margin:0;font-size:13px;line-height:1.5;color:#9CA3AF;">Esta ruta está sirviendo el archivo fuente sin compilar. En GitHub, ve a <strong>Settings &gt; Pages</strong> y selecciona <strong>GitHub Actions</strong> o <strong>Branch: main / docs</strong>.</p>' +
+            "</div></div>";
+        }
+
+        rawEntry.addEventListener("error", tryDocsFallback);
+        window.addEventListener("DOMContentLoaded", function () {
+          setTimeout(tryDocsFallback, 800);
+        });
+      })();
     </script>
   </body>
 </html>
