@@ -10,6 +10,7 @@ import type {
   AIPlacement,
   AnalysisResult,
   CanvasFormat,
+  CustomPalette,
   FontAsset,
   ImageSettings,
   LayoutProposal,
@@ -26,10 +27,16 @@ import {
   uploadCustomFontFile,
 } from "./utils/fonts";
 import {
+  loadSavedCustomPalette,
+  saveCustomPalette,
+  uploadPaletteFile,
+} from "./utils/palettes";
+import {
   BUILTIN_FONTS,
   INITIAL_STUDIO_STATE,
   imageSrcToOptimizedBase64,
 } from "./utils/studioDefaults";
+import { analyzeImageLocally } from "./utils/localImageAnalyzer";
 
 type SidePanelMode = "none" | "assets" | "ai" | "text" | "controls";
 
@@ -102,9 +109,13 @@ export default function App() {
     cloneDoc(INITIAL_STUDIO_STATE)
   );
 
-  // Fonts state
+  // Fonts & Palette state
   const [customFonts, setCustomFonts] = useState<FontAsset[]>([]);
   const [fontUploadError, setFontUploadError] = useState<string | null>(null);
+  const [customPalette, setCustomPalette] = useState<CustomPalette | null>(() =>
+    loadSavedCustomPalette()
+  );
+  const [paletteError, setPaletteError] = useState<string | null>(null);
   const allFonts = [...customFonts, ...BUILTIN_FONTS];
 
   useEffect(() => {
@@ -221,11 +232,22 @@ export default function App() {
   }, [handleStepBack, handleStepForward]);
 
   // Image Handlers
-  const handleUpdateImage = (patch: Partial<ImageSettings>) => {
-    setDocState((prev) => ({
-      ...prev,
-      image: { ...prev.image, ...patch },
-    }));
+  const handleUpdateImage = (patch: Partial<ImageSettings>, commitLabel?: string) => {
+    if (commitLabel) {
+      commitStateChange(
+        (prev) => ({
+          ...prev,
+          image: { ...prev.image, ...patch },
+        }),
+        commitLabel,
+        "edit"
+      );
+    } else {
+      setDocState((prev) => ({
+        ...prev,
+        image: { ...prev.image, ...patch },
+      }));
+    }
   };
 
   const handleSelectNewImage = (
@@ -247,6 +269,8 @@ export default function App() {
           zoom: 1,
           panX: 0,
           panY: 0,
+          rotation: 0,
+          locked: false,
         },
       }),
       `Imagen: ${name}`,
@@ -305,6 +329,56 @@ export default function App() {
     const targetId = selectedLayerId || docState.layers[0]?.id;
     if (!targetId) return;
     handleUpdateLayer(targetId, { fontFamily: family }, true);
+  };
+
+  // Custom Color Palette Handlers
+  const handleUploadPaletteFile = async (file: File) => {
+    setPaletteError(null);
+    try {
+      const uploaded = await uploadPaletteFile(file);
+      setCustomPalette(uploaded);
+      saveCustomPalette(uploaded);
+    } catch (err) {
+      setPaletteError(
+        err instanceof Error ? err.message : "No se pudo cargar la paleta de colores."
+      );
+    }
+  };
+
+  const handleAddPaletteColor = (hex: string) => {
+    setPaletteError(null);
+    setCustomPalette((prev) => {
+      const baseColors = prev?.colors || [];
+      if (baseColors.includes(hex)) return prev;
+      const next: CustomPalette = {
+        name: prev?.name || "Mi paleta",
+        colors: [...baseColors, hex].slice(0, 16),
+      };
+      saveCustomPalette(next);
+      return next;
+    });
+  };
+
+  const handleRemovePaletteColor = (hex: string) => {
+    setCustomPalette((prev) => {
+      if (!prev) return null;
+      const nextColors = prev.colors.filter((c) => c !== hex);
+      const next = nextColors.length > 0 ? { ...prev, colors: nextColors } : null;
+      saveCustomPalette(next);
+      return next;
+    });
+  };
+
+  const handleClearPalette = () => {
+    setPaletteError(null);
+    setCustomPalette(null);
+    saveCustomPalette(null);
+  };
+
+  const handleApplyColorToSelected = (hex: string) => {
+    const targetId = selectedLayerId || docState.layers[0]?.id;
+    if (!targetId) return;
+    handleUpdateLayer(targetId, { color: hex }, true);
   };
 
   // Text Layer Handlers
@@ -480,7 +554,51 @@ export default function App() {
     });
   };
 
-  // AI Image Analysis
+  // Instant Local Zero-AI Image Analysis
+  const handleAnalyzeLocal = async () => {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setInspectorTab("ai");
+    if (window.innerWidth < 1024) {
+      setMobileSidePanel("ai");
+    }
+
+    try {
+      const result = await analyzeImageLocally(
+        docState.image,
+        docState.format,
+        allFonts,
+        docState.layers,
+        customPalette?.colors ?? []
+      );
+      setAnalysisResult(result);
+
+      if (result.recommendations && result.recommendations.length > 0) {
+        const firstRec = result.recommendations[0];
+        const candidateState = buildStateFromPlacements(
+          firstRec.placements,
+          firstRec.recommendedScrim,
+          firstRec.scrimOpacity
+        );
+        setIsComparingOriginal(false);
+        setPreviewSession({
+          title: firstRec.title,
+          subtitle: firstRec.description,
+          candidateState,
+          focalZone: result.focalZone,
+          proposalId: firstRec.id,
+        });
+      }
+    } catch (err) {
+      setAnalysisError(
+        err instanceof Error ? err.message : "No se pudo analizar la imagen localmente."
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Optional Server AI Image Analysis
   const handleAnalyzeImage = async () => {
     setIsAnalyzing(true);
     setAnalysisError(null);
@@ -715,6 +833,7 @@ export default function App() {
           <AssetPanel
             image={docState.image}
             onUpdateImage={handleUpdateImage}
+            onCommitImageEdit={handleCommitEdit}
             onSelectNewImage={handleSelectNewImage}
             fonts={allFonts}
             onUploadFonts={handleUploadFonts}
@@ -722,6 +841,13 @@ export default function App() {
             onApplyFontToSelected={handleApplyFontToSelected}
             fontUploadError={fontUploadError}
             highlightFontsSection={topSection === "fonts"}
+            customPalette={customPalette}
+            paletteError={paletteError}
+            onUploadPaletteFile={handleUploadPaletteFile}
+            onAddPaletteColor={handleAddPaletteColor}
+            onRemovePaletteColor={handleRemovePaletteColor}
+            onClearPalette={handleClearPalette}
+            onApplyColorToSelected={handleApplyColorToSelected}
           />
         </aside>
 
@@ -731,6 +857,7 @@ export default function App() {
           selectedLayerId={selectedLayerId}
           onSelectLayer={setSelectedLayerId}
           onChangeFormat={handleChangeFormat}
+          onUpdateImage={handleUpdateImage}
           onUpdateLayer={handleUpdateLayer}
           onCommitEdit={handleCommitEdit}
           showGuides={showGuides}
@@ -740,7 +867,7 @@ export default function App() {
           historyPositionLabel={`${historyIndex + 1}/${history.length}`}
           onUndo={handleStepBack}
           onRedo={handleStepForward}
-          onTriggerAnalyze={handleAnalyzeImage}
+          onTriggerAnalyze={handleAnalyzeLocal}
           isAnalyzing={isAnalyzing}
           previewSession={previewSession}
           isComparingOriginal={isComparingOriginal}
@@ -754,6 +881,7 @@ export default function App() {
           <InspectorPanel
             activeTab={inspectorTab}
             onChangeTab={setInspectorTab}
+            onAnalyzeLocal={handleAnalyzeLocal}
             onAnalyzeImage={handleAnalyzeImage}
             isAnalyzing={isAnalyzing}
             analysisError={analysisError}
@@ -769,6 +897,7 @@ export default function App() {
             onUpdateLayer={handleUpdateLayer}
             onCommitEdit={handleCommitEdit}
             fonts={allFonts}
+            customPalette={customPalette}
             previewQuickChanges={previewQuickChanges}
             onTogglePreviewQuickChanges={() => setPreviewQuickChanges((p) => !p)}
             onRunQuickAdjustment={handleRunQuickAdjustment}
@@ -789,7 +918,7 @@ export default function App() {
               <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-neutral-200 dark:border-neutral-800">
                 <span className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-100 truncate">
                   {mobileSidePanel === "assets"
-                    ? "Imagen y fuentes"
+                    ? "Base, fuentes y paleta"
                     : mobileSidePanel === "ai"
                     ? "Recomendaciones"
                     : mobileSidePanel === "text"
@@ -812,12 +941,20 @@ export default function App() {
                   <AssetPanel
                     image={docState.image}
                     onUpdateImage={handleUpdateImage}
+                    onCommitImageEdit={handleCommitEdit}
                     onSelectNewImage={handleSelectNewImage}
                     fonts={allFonts}
                     onUploadFonts={handleUploadFonts}
                     onDeleteCustomFont={handleDeleteCustomFont}
                     onApplyFontToSelected={handleApplyFontToSelected}
                     fontUploadError={fontUploadError}
+                    customPalette={customPalette}
+                    paletteError={paletteError}
+                    onUploadPaletteFile={handleUploadPaletteFile}
+                    onAddPaletteColor={handleAddPaletteColor}
+                    onRemovePaletteColor={handleRemovePaletteColor}
+                    onClearPalette={handleClearPalette}
+                    onApplyColorToSelected={handleApplyColorToSelected}
                   />
                 ) : (
                   <InspectorPanel
@@ -832,6 +969,7 @@ export default function App() {
                       setInspectorTab(t);
                       setMobileSidePanel(t);
                     }}
+                    onAnalyzeLocal={handleAnalyzeLocal}
                     onAnalyzeImage={handleAnalyzeImage}
                     isAnalyzing={isAnalyzing}
                     analysisError={analysisError}
@@ -847,6 +985,7 @@ export default function App() {
                     onUpdateLayer={handleUpdateLayer}
                     onCommitEdit={handleCommitEdit}
                     fonts={allFonts}
+                    customPalette={customPalette}
                     previewQuickChanges={previewQuickChanges}
                     onTogglePreviewQuickChanges={() => setPreviewQuickChanges((p) => !p)}
                     onRunQuickAdjustment={handleRunQuickAdjustment}

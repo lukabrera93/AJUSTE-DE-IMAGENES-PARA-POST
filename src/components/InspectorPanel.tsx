@@ -18,6 +18,7 @@ import {
 import type {
   AestheticRecommendation,
   AnalysisResult,
+  CustomPalette,
   FontAsset,
   LayoutProposal,
   TextLayer,
@@ -30,7 +31,8 @@ export type InspectorTab = "ai" | "text" | "controls";
 interface InspectorPanelProps {
   activeTab: InspectorTab;
   onChangeTab: (tab: InspectorTab) => void;
-  // AI tab
+  // Recommendations tab
+  onAnalyzeLocal: () => void;
   onAnalyzeImage: () => void;
   isAnalyzing: boolean;
   analysisError: string | null;
@@ -47,6 +49,7 @@ interface InspectorPanelProps {
   onUpdateLayer: (id: string, patch: Partial<TextLayer>, commitHistory?: boolean) => void;
   onCommitEdit: (label?: string) => void;
   fonts: FontAsset[];
+  customPalette?: CustomPalette | null;
   // Controls & History tab
   previewQuickChanges: boolean;
   onTogglePreviewQuickChanges: () => void;
@@ -77,6 +80,7 @@ const CATEGORY_LABELS: Record<AestheticRecommendation["category"], string> = {
 export function InspectorPanel({
   activeTab,
   onChangeTab,
+  onAnalyzeLocal,
   onAnalyzeImage,
   isAnalyzing,
   analysisError,
@@ -92,6 +96,7 @@ export function InspectorPanel({
   onUpdateLayer,
   onCommitEdit,
   fonts,
+  customPalette,
   previewQuickChanges,
   onTogglePreviewQuickChanges,
   onRunQuickAdjustment,
@@ -174,25 +179,37 @@ export function InspectorPanel({
           <div className="space-y-4">
             <div className="space-y-2">
               <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Analiza tu fotografía para obtener recomendaciones de estética limpia y ejecutarlas en vivo con{" "}
+                Detecta espacios vacíos, contraste y sujeto principal al instante sin IA usando{" "}
                 {customFonts.length > 0
                   ? `tus ${customFonts.length} fuentes subidas.`
                   : "tipografías editoriales."}
               </p>
 
-              <button
-                type="button"
-                disabled={isAnalyzing}
-                onClick={onAnalyzeImage}
-                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer min-h-[42px]"
-              >
-                <Sparkles className="w-4 h-4 shrink-0" />
-                <span>
-                  {isAnalyzing
-                    ? "Analizando imagen..."
-                    : "Analizar imagen y recomendar"}
-                </span>
-              </button>
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  disabled={isAnalyzing}
+                  onClick={onAnalyzeLocal}
+                  className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer min-h-[42px]"
+                >
+                  <Wand2 className="w-4 h-4 shrink-0" />
+                  <span>Analizar y recomendar (Sin IA)</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isAnalyzing}
+                  onClick={onAnalyzeImage}
+                  className="w-full py-2 px-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#161A22] hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-60 text-neutral-700 dark:text-neutral-200 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[36px]"
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {isAnalyzing
+                      ? "Consultando IA..."
+                      : "Análisis con IA (requiere servidor)"}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {analysisError && (
@@ -214,28 +231,55 @@ export function InspectorPanel({
 
             {!isAnalyzing && analysisResult && (
               <div className="space-y-5">
-                {/* Extracted Palette */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
-                    <span>Paleta de tu imagen</span>
-                    <span>Aplicar al texto</span>
+                {/* Extracted Palette & Custom Palette */}
+                <div className="space-y-2.5">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <span>Paleta de tu imagen</span>
+                      <span>Aplicar al texto</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {analysisResult.paletteColors.map((hex, i) => (
+                        <button
+                          key={`${hex}-${i}`}
+                          type="button"
+                          onClick={() => {
+                            if (selectedLayer) {
+                              onUpdateLayer(selectedLayer.id, { color: hex }, true);
+                            }
+                          }}
+                          className="flex-1 h-7 rounded-md border border-black/10 dark:border-white/10 transition-transform hover:scale-105 cursor-pointer"
+                          style={{ backgroundColor: hex }}
+                          title={`Aplicar ${hex} al texto seleccionado`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {analysisResult.paletteColors.map((hex, i) => (
-                      <button
-                        key={`${hex}-${i}`}
-                        type="button"
-                        onClick={() => {
-                          if (selectedLayer) {
-                            onUpdateLayer(selectedLayer.id, { color: hex }, true);
-                          }
-                        }}
-                        className="flex-1 h-7 rounded-md border border-black/10 dark:border-white/10 transition-transform hover:scale-105 cursor-pointer"
-                        style={{ backgroundColor: hex }}
-                        title={`Aplicar ${hex} al texto seleccionado`}
-                      />
-                    ))}
-                  </div>
+
+                  {customPalette && customPalette.colors.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <span className="truncate">Tu paleta ({customPalette.name})</span>
+                        <span className="shrink-0">Aplicar al texto</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {customPalette.colors.map((hex, i) => (
+                          <button
+                            key={`custom-rec-${hex}-${i}`}
+                            type="button"
+                            onClick={() => {
+                              if (selectedLayer) {
+                                onUpdateLayer(selectedLayer.id, { color: hex }, true);
+                              }
+                            }}
+                            className="w-7 h-7 rounded-md border border-black/10 dark:border-white/10 transition-transform hover:scale-105 cursor-pointer"
+                            style={{ backgroundColor: hex }}
+                            title={`Aplicar ${hex} al texto seleccionado`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Executable Clean-Aesthetic Recommendations */}
@@ -663,6 +707,28 @@ export function InspectorPanel({
                       ))}
                     </div>
                   </div>
+
+                  {customPalette && customPalette.colors.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                        Tu paleta ({customPalette.name})
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {customPalette.colors.map((swatch, idx) => (
+                          <button
+                            key={`custom-txt-${swatch}-${idx}`}
+                            type="button"
+                            onClick={() =>
+                              onUpdateLayer(selectedLayer.id, { color: swatch }, true)
+                            }
+                            className="w-6 h-6 rounded-md border border-black/15 dark:border-white/15 cursor-pointer transition-transform hover:scale-105"
+                            style={{ backgroundColor: swatch }}
+                            title={`Aplicar ${swatch}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <label className="block space-y-1 pt-1">
                     <div className="flex justify-between text-[11px] text-neutral-600 dark:text-neutral-400">

@@ -156,10 +156,13 @@ export const INITIAL_STUDIO_STATE: StudioDocumentState = {
     zoom: 1,
     panX: 0,
     panY: 0,
+    rotation: 0,
+    canvasBgColor: "#0F1115",
     brightness: 100,
     contrast: 100,
     scrimType: "top",
     scrimOpacity: 0.28,
+    locked: false,
   },
   layers: INITIAL_LAYERS,
 };

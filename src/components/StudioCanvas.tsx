@@ -3,15 +3,22 @@ import {
   Check,
   Eye,
   Grid3X3,
+  Lock,
+  Move,
   Pencil,
   Redo2,
   RotateCcw,
+  RotateCw,
   Sparkles,
   Undo2,
+  Unlock,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import type {
   CanvasFormat,
+  ImageSettings,
   PreviewSession,
   StudioDocumentState,
   TextLayer,
@@ -23,6 +30,7 @@ interface StudioCanvasProps {
   onSelectLayer: (id: string | null) => void;
   onChangeFormat: (format: CanvasFormat) => void;
   onUpdateLayer: (id: string, patch: Partial<TextLayer>, commitHistory?: boolean) => void;
+  onUpdateImage: (patch: Partial<ImageSettings>, commitLabel?: string) => void;
   onCommitEdit: (label?: string) => void;
   showGuides: boolean;
   onToggleGuides: () => void;
@@ -46,6 +54,7 @@ export function StudioCanvas({
   onSelectLayer,
   onChangeFormat,
   onUpdateLayer,
+  onUpdateImage,
   onCommitEdit,
   showGuides,
   onToggleGuides,
@@ -65,16 +74,26 @@ export function StudioCanvas({
   const stageRef = useRef<HTMLDivElement>(null);
   const [boardSize, setBoardSize] = useState({ width: 320, height: 400 });
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
-  const [snapGuide, setSnapGuide] = useState<{ centerX?: boolean; leftMargin?: boolean }>({});
+  const [snapGuide, setSnapGuide] = useState<{ centerX?: boolean; centerY?: boolean; leftMargin?: boolean }>({});
   const [imageBroken, setImageBroken] = useState(false);
+  const [isImageMoveMode, setIsImageMoveMode] = useState(false);
+  const [imgNaturalRatio, setImgNaturalRatio] = useState<number | null>(null);
 
   const activeDoc =
     previewSession && !isComparingOriginal ? previewSession.candidateState : docState;
 
   const isPreviewMode = Boolean(previewSession);
+  const isImageLocked = Boolean(activeDoc.image.locked);
+
+  useEffect(() => {
+    if (docState.image.locked && isImageMoveMode) {
+      setIsImageMoveMode(false);
+    }
+  }, [docState.image.locked, isImageMoveMode]);
 
   useEffect(() => {
     setImageBroken(false);
+    setImgNaturalRatio(null);
   }, [activeDoc.image.src]);
 
   useEffect(() => {
@@ -112,6 +131,7 @@ export function StudioCanvas({
 
   const scale = boardSize.width / 1080;
 
+  // Text Layer Dragging
   const dragRef = useRef<{
     layerId: string;
     startX: number;
@@ -122,8 +142,17 @@ export function StudioCanvas({
     moved: boolean;
   } | null>(null);
 
-  const handlePointerDown = (e: React.PointerEvent, layer: TextLayer) => {
-    if (isPreviewMode || editingLayerId === layer.id) return;
+  // Image Free Dragging
+  const imageDragRef = useRef<{
+    startX: number;
+    startY: number;
+    origPanX: number;
+    origPanY: number;
+    moved: boolean;
+  } | null>(null);
+
+  const handleLayerPointerDown = (e: React.PointerEvent, layer: TextLayer) => {
+    if (isPreviewMode || isImageMoveMode || editingLayerId === layer.id) return;
     e.stopPropagation();
     onSelectLayer(layer.id);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -138,7 +167,7 @@ export function StudioCanvas({
     };
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
+  const handleLayerPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current;
     if (!drag) return;
 
@@ -170,12 +199,81 @@ export function StudioCanvas({
     onUpdateLayer(drag.layerId, { x: Number(nextX.toFixed(1)), y: Number(nextY.toFixed(1)) }, false);
   };
 
-  const handlePointerUp = () => {
+  const handleLayerPointerUp = () => {
     if (dragRef.current?.moved) {
       onCommitEdit("Posición de texto ajustada");
     }
     dragRef.current = null;
     setSnapGuide({});
+  };
+
+  // Board / Background Image Pointer Dragging
+  const handleBoardPointerDown = (e: React.PointerEvent) => {
+    if (isPreviewMode) return;
+    if (editingLayerId) {
+      setEditingLayerId(null);
+      onCommitEdit("Edición de texto");
+    }
+    onSelectLayer(null);
+    if (isImageLocked) return;
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    imageDragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origPanX: docState.image.panX,
+      origPanY: docState.image.panY,
+      moved: false,
+    };
+  };
+
+  const handleBoardPointerMove = (e: React.PointerEvent) => {
+    if (isImageLocked) return;
+    const imgDrag = imageDragRef.current;
+    if (!imgDrag) return;
+
+    const dxPx = e.clientX - imgDrag.startX;
+    const dyPx = e.clientY - imgDrag.startY;
+    if (Math.abs(dxPx) > 2 || Math.abs(dyPx) > 2) {
+      imgDrag.moved = true;
+    }
+
+    // Matching pan formula: offset = (pan / 100) * boardSize * 0.5 => deltaPan = (dx / boardSize) * 200
+    let nextPanX = Math.max(-150, Math.min(150, imgDrag.origPanX + (dxPx / boardSize.width) * 200));
+    let nextPanY = Math.max(-150, Math.min(150, imgDrag.origPanY + (dyPx / boardSize.height) * 200));
+
+    let snapX = false;
+    let snapY = false;
+    if (Math.abs(nextPanX) < 3.5) {
+      nextPanX = 0;
+      snapX = true;
+    }
+    if (Math.abs(nextPanY) < 3.5) {
+      nextPanY = 0;
+      snapY = true;
+    }
+
+    setSnapGuide({ centerX: snapX, centerY: snapY });
+    onUpdateImage({
+      panX: Math.round(nextPanX),
+      panY: Math.round(nextPanY),
+    });
+  };
+
+  const handleBoardPointerUp = () => {
+    if (imageDragRef.current?.moved) {
+      onCommitEdit("Imagen reubicada");
+    }
+    imageDragRef.current = null;
+    setSnapGuide({});
+  };
+
+  const handleBoardWheel = (e: React.WheelEvent) => {
+    if (isPreviewMode || isImageLocked) return;
+    if (!isImageMoveMode && !e.ctrlKey && !e.altKey) return;
+    const delta = e.deltaY < 0 ? 0.06 : -0.06;
+    const nextZoom = Math.max(0.3, Math.min(3, Number((docState.image.zoom + delta).toFixed(2))));
+    onUpdateImage({ zoom: nextZoom });
   };
 
   const renderScrimStyle = (): React.CSSProperties | null => {
@@ -201,6 +299,21 @@ export function StudioCanvas({
   };
 
   const scrimStyle = renderScrimStyle();
+
+  // Compute exact unclipped image dimensions matching drawBaseImageToCanvas 1:1
+  const canvasRatio = activeDoc.format === "1080x1920" ? 1080 / 1920 : 1080 / 1350;
+  const effectiveRatio = imgNaturalRatio || canvasRatio;
+  let baseWidthPct = 100;
+  let baseHeightPct = 100;
+  if (effectiveRatio > canvasRatio) {
+    baseHeightPct = 100;
+    baseWidthPct = (effectiveRatio / canvasRatio) * 100;
+  } else {
+    baseWidthPct = 100;
+    baseHeightPct = (canvasRatio / effectiveRatio) * 100;
+  }
+  const panOffsetX = (activeDoc.image.panX / 100) * boardSize.width * 0.5;
+  const panOffsetY = (activeDoc.image.panY / 100) * boardSize.height * 0.5;
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-neutral-100 dark:bg-[#0B0D10]">
@@ -234,7 +347,7 @@ export function StudioCanvas({
           </button>
         </div>
 
-        {/* Retroceder / Avanzar + Guías + IA */}
+        {/* Center/Right Canvas Tools */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <div className="flex items-center gap-1 bg-neutral-100 dark:bg-[#181C24] border border-neutral-200/80 dark:border-neutral-800 rounded-lg p-0.5">
             <button
@@ -266,6 +379,52 @@ export function StudioCanvas({
 
           <button
             type="button"
+            disabled={isPreviewMode || isImageLocked}
+            onClick={() => setIsImageMoveMode((m) => !m)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${
+              isImageMoveMode && !isImageLocked
+                ? "border-blue-600 bg-blue-600 text-white"
+                : "border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            }`}
+            title={
+              isImageLocked
+                ? "Desbloquea la imagen para moverla"
+                : "Activar modo libre para mover, escalar y rotar la imagen"
+            }
+          >
+            <Move className="w-3.5 h-3.5" />
+            <span>Mover imagen</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={isPreviewMode}
+            onClick={() => {
+              const nextLocked = !docState.image.locked;
+              if (nextLocked) setIsImageMoveMode(false);
+              onUpdateImage(
+                { locked: nextLocked },
+                nextLocked ? "Imagen bloqueada" : "Imagen desbloqueada"
+              );
+            }}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50 ${
+              isImageLocked
+                ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                : "border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            }`}
+            title={
+              isImageLocked
+                ? "Desbloquear imagen para moverla de nuevo"
+                : "Bloquear imagen para editar texto sin moverla por error"
+            }
+            aria-pressed={isImageLocked}
+          >
+            {isImageLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+            <span>{isImageLocked ? "Bloqueada" : "Bloquear"}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={onToggleGuides}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               showGuides
@@ -290,7 +449,103 @@ export function StudioCanvas({
         </div>
       </div>
 
-      {/* Interactive Stage Viewport (Never covered by floating overlays) */}
+      {/* Dedicated Image Manipulation Sub-bar when Mover imagen mode is active */}
+      {isImageMoveMode && !isImageLocked && !isPreviewMode && (
+        <div className="shrink-0 px-3 py-1.5 border-b border-blue-500/30 bg-blue-600/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-[11px] font-medium text-blue-700 dark:text-blue-300">
+            Arrastra la imagen libremente sobre el lienzo (rueda para zoom)
+          </span>
+          <div className="flex items-center gap-1 flex-wrap">
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateImage(
+                  { zoom: Math.max(0.3, Number((docState.image.zoom - 0.1).toFixed(2))) },
+                  "Escala de imagen"
+                )
+              }
+              className="p-1.5 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 cursor-pointer"
+              title="Alejar imagen"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[11px] font-mono tabular-nums px-1 text-neutral-700 dark:text-neutral-200">
+              {docState.image.zoom.toFixed(2)}×
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateImage(
+                  { zoom: Math.min(3, Number((docState.image.zoom + 0.1).toFixed(2))) },
+                  "Escala de imagen"
+                )
+              }
+              className="p-1.5 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 cursor-pointer"
+              title="Acercar imagen"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateImage(
+                  { rotation: Math.max(-180, (docState.image.rotation || 0) - 15) },
+                  "Rotación de imagen"
+                )
+              }
+              className="p-1.5 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 cursor-pointer"
+              title="Rotar -15°"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateImage(
+                  { rotation: Math.min(180, (docState.image.rotation || 0) + 15) },
+                  "Rotación de imagen"
+                )
+              }
+              className="p-1.5 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 cursor-pointer"
+              title="Rotar +15°"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateImage(
+                  { zoom: 1, panX: 0, panY: 0, rotation: 0 },
+                  "Imagen centrada"
+                )
+              }
+              className="px-2 py-1 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-[11px] font-medium text-neutral-700 dark:text-neutral-200 cursor-pointer"
+            >
+              Centrar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsImageMoveMode(false);
+                onUpdateImage({ locked: true }, "Imagen bloqueada");
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-800 dark:text-amber-200 text-[11px] font-semibold cursor-pointer"
+            >
+              <Lock className="w-3 h-3" />
+              <span>Bloquear aquí</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsImageMoveMode(false)}
+              className="px-2.5 py-1 rounded-md bg-blue-600 text-white text-[11px] font-semibold cursor-pointer"
+            >
+              Listo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Stage Viewport */}
       <div
         ref={stageRef}
         onClick={() => {
@@ -304,16 +559,30 @@ export function StudioCanvas({
       >
         {/* Artboard Container */}
         <div
-          style={{ width: boardSize.width, height: boardSize.height }}
-          className={`relative overflow-hidden shadow-2xl bg-[#101216] transition-[box-shadow] ${
+          onPointerDown={handleBoardPointerDown}
+          onPointerMove={handleBoardPointerMove}
+          onPointerUp={handleBoardPointerUp}
+          onPointerCancel={handleBoardPointerUp}
+          onWheel={handleBoardWheel}
+          style={{
+            width: boardSize.width,
+            height: boardSize.height,
+            backgroundColor: activeDoc.image.canvasBgColor || "#0F1115",
+            touchAction: "none",
+          }}
+          className={`relative overflow-hidden shadow-2xl transition-[box-shadow] ${
             isPreviewMode
-              ? "ring-2 ring-blue-500 shadow-blue-950/30"
-              : "ring-1 ring-black/10 dark:ring-white/10"
+              ? "ring-2 ring-blue-500 shadow-blue-950/30 cursor-default"
+              : isImageLocked
+              ? "cursor-default ring-1 ring-amber-500/35"
+              : isImageMoveMode
+              ? "cursor-grab active:cursor-grabbing ring-2 ring-blue-500"
+              : "cursor-grab active:cursor-grabbing ring-1 ring-black/10 dark:ring-white/10"
           }`}
         >
-          {/* Base Image */}
+          {/* Base Image (Unclipped natural aspect ratio centered, matching canvasExport 1:1) */}
           {imageBroken ? (
-            <div className="absolute inset-0 bg-neutral-800 flex flex-col items-center justify-center text-neutral-400 text-xs p-6 text-center">
+            <div className="absolute inset-0 bg-neutral-800 flex flex-col items-center justify-center text-neutral-400 text-xs p-6 text-center pointer-events-none">
               <span>No se pudo mostrar la imagen</span>
             </div>
           ) : (
@@ -321,10 +590,21 @@ export function StudioCanvas({
               src={activeDoc.image.src}
               alt={activeDoc.image.name}
               referrerPolicy="no-referrer"
+              onLoad={(e) => {
+                if (e.currentTarget.naturalWidth && e.currentTarget.naturalHeight) {
+                  setImgNaturalRatio(
+                    e.currentTarget.naturalWidth / e.currentTarget.naturalHeight
+                  );
+                }
+              }}
               onError={() => setImageBroken(true)}
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+              className="absolute max-w-none pointer-events-none select-none"
               style={{
-                transform: `translate(${activeDoc.image.panX * 0.5}%, ${activeDoc.image.panY * 0.5}%) scale(${activeDoc.image.zoom})`,
+                left: "50%",
+                top: "50%",
+                width: `${baseWidthPct}%`,
+                height: `${baseHeightPct}%`,
+                transform: `translate(calc(-50% + ${panOffsetX}px), calc(-50% + ${panOffsetY}px)) rotate(${activeDoc.image.rotation || 0}deg) scale(${activeDoc.image.zoom})`,
                 transformOrigin: "center center",
                 filter: `brightness(${activeDoc.image.brightness}%) contrast(${activeDoc.image.contrast}%)`,
               }}
@@ -366,6 +646,9 @@ export function StudioCanvas({
           {snapGuide.centerX && (
             <div className="absolute inset-y-0 left-1/2 w-px bg-blue-400 z-20 pointer-events-none" />
           )}
+          {snapGuide.centerY && (
+            <div className="absolute inset-x-0 top-1/2 h-px bg-blue-400 z-20 pointer-events-none" />
+          )}
           {snapGuide.leftMargin && (
             <div className="absolute inset-y-0 left-[8%] w-px bg-blue-400 z-20 pointer-events-none" />
           )}
@@ -389,8 +672,8 @@ export function StudioCanvas({
 
           {/* Text Layers */}
           {activeDoc.layers.map((layer) => {
-            const isSelected = !isPreviewMode && selectedLayerId === layer.id;
-            const isEditing = !isPreviewMode && editingLayerId === layer.id;
+            const isSelected = !isPreviewMode && !isImageMoveMode && selectedLayerId === layer.id;
+            const isEditing = !isPreviewMode && !isImageMoveMode && editingLayerId === layer.id;
             const scaledFontSize = Math.max(8, layer.fontSize * scale);
             const shadowCss =
               layer.shadowStrength > 0.02
@@ -400,12 +683,12 @@ export function StudioCanvas({
             return (
               <div
                 key={layer.id}
-                onPointerDown={(e) => handlePointerDown(e, layer)}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
+                onPointerDown={(e) => handleLayerPointerDown(e, layer)}
+                onPointerMove={handleLayerPointerMove}
+                onPointerUp={handleLayerPointerUp}
+                onPointerCancel={handleLayerPointerUp}
                 onDoubleClick={(e) => {
-                  if (isPreviewMode) return;
+                  if (isPreviewMode || isImageMoveMode) return;
                   e.stopPropagation();
                   onSelectLayer(layer.id);
                   setEditingLayerId(layer.id);
@@ -426,12 +709,12 @@ export function StudioCanvas({
                   touchAction: "none",
                 }}
                 className={`absolute z-20 transition-shadow ${
-                  isPreviewMode
+                  isPreviewMode || isImageMoveMode
                     ? "pointer-events-none"
                     : isSelected
                     ? "cursor-move ring-1 ring-blue-400 bg-blue-500/5"
                     : "cursor-pointer hover:ring-1 hover:ring-white/45"
-                }`}
+                } ${isImageMoveMode ? "opacity-75" : ""}`}
               >
                 {isEditing ? (
                   <textarea

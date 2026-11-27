@@ -206,7 +206,7 @@ function drawBaseImageToCanvas(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("No se pudo inicializar el motor de exportación.");
 
-  ctx.fillStyle = "#0F1115";
+  ctx.fillStyle = doc.image.canvasBgColor || "#0F1115";
   ctx.fillRect(0, 0, width, height);
 
   const imgRatio = img.naturalWidth / img.naturalHeight;
@@ -225,12 +225,17 @@ function drawBaseImageToCanvas(
   drawW *= doc.image.zoom;
   drawH *= doc.image.zoom;
 
-  const offsetX = (width - drawW) / 2 + (doc.image.panX / 100) * width * 0.5;
-  const offsetY = (height - drawH) / 2 + (doc.image.panY / 100) * height * 0.5;
+  const centerX = width / 2 + (doc.image.panX / 100) * width * 0.5;
+  const centerY = height / 2 + (doc.image.panY / 100) * height * 0.5;
+  const rad = ((doc.image.rotation || 0) * Math.PI) / 180;
 
   ctx.save();
   ctx.filter = `brightness(${doc.image.brightness}%) contrast(${doc.image.contrast}%)`;
-  ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+  ctx.translate(centerX, centerY);
+  if (rad !== 0) {
+    ctx.rotate(rad);
+  }
+  ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
   ctx.restore();
 
   return canvas;

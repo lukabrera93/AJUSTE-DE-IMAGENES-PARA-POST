@@ -16,6 +16,11 @@ export interface FontAsset {
   formatLabel?: string;
 }
 
+export interface CustomPalette {
+  name: string;
+  colors: string[];
+}
+
 export interface TextLayer {
   id: string;
   role: TextRole;
@@ -37,13 +42,16 @@ export interface TextLayer {
 export interface ImageSettings {
   src: string;
   name: string;
-  zoom: number; // 1..2.2
-  panX: number; // -50..50
-  panY: number; // -50..50
+  zoom: number; // 0.3..3.0
+  panX: number; // -150..150
+  panY: number; // -150..150
+  rotation: number; // -180..180 degrees
+  canvasBgColor: string;
   brightness: number; // 50..140 (%)
   contrast: number; // 70..140 (%)
   scrimType: ScrimType;
   scrimOpacity: number; // 0..0.75
+  locked?: boolean;
 }
 
 export interface FocalZone {
