@@ -25,5 +25,20 @@
   <body class="bg-neutral-50 text-neutral-900 dark:bg-[#0B0D10] dark:text-neutral-100 antialiased selection:bg-blue-600/20 selection:text-blue-500">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.addEventListener("DOMContentLoaded", function () {
+        var rawEntry = document.querySelector('script[src="/src/main.tsx"]');
+        if (!rawEntry) return;
+        setTimeout(function () {
+          if (!window.__RETICULA_MOUNTED__) {
+            fetch("./docs/index.html", { method: "HEAD" })
+              .then(function (res) {
+                if (res.ok) window.location.replace("./docs/");
+              })
+              .catch(function () {});
+          }
+        }, 1200);
+      });
+    </script>
   </body>
 </html>

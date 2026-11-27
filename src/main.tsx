@@ -41,6 +41,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 }
 
+(window as unknown as { __RETICULA_MOUNTED__?: boolean }).__RETICULA_MOUNTED__ = true;
+
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <App />

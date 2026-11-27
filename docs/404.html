@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Retícula Studio — Composición Tipográfica para Redes Sociales</title>
+    <meta
+      name="description"
+      content="Estudio tipográfico inteligente para subir imágenes y fuentes propias, analizar composición, editar textos en tiempo real y exportar en 1080×1350 y 1080×1920."
+    />
+    <meta property="og:title" content="Retícula Studio — Composición Tipográfica para Redes Sociales" />
+    <meta
+      property="og:description"
+      content="Estudio tipográfico inteligente para subir imágenes y fuentes propias, analizar composición, editar textos en tiempo real y exportar en 1080×1350 y 1080×1920."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&family=Lora:ital,wght@0,400;0,600;1,400&family=Oswald:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" crossorigin src="./assets/index-u7ZCCrdD.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DmOaxawG.css">
+  </head>
+  <body class="bg-neutral-50 text-neutral-900 dark:bg-[#0B0D10] dark:text-neutral-100 antialiased selection:bg-blue-600/20 selection:text-blue-500">
+    <div id="root"></div>
+    <script>
+      window.addEventListener("DOMContentLoaded", function () {
+        var rawEntry = document.querySelector('script[src="/src/main.tsx"]');
+        if (!rawEntry) return;
+        setTimeout(function () {
+          if (!window.__RETICULA_MOUNTED__) {
+            fetch("./docs/index.html", { method: "HEAD" })
+              .then(function (res) {
+                if (res.ok) window.location.replace("./docs/");
+              })
+              .catch(function () {});
+          }
+        }, 1200);
+      });
+    </script>
+  </body>
+</html>
