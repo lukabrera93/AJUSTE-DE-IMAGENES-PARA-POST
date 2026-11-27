@@ -1,0 +1,6 @@
+{
+  "name": "Retícula Studio",
+  "description": "Estudio tipográfico inteligente para subir imágenes y fuentes propias, analizar composición, editar textos en tiempo real y exportar en 1080×1350 y 1080×1920.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
