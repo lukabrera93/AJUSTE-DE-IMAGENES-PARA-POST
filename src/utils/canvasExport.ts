@@ -1,4 +1,4 @@
-import { writePsd, type Layer, type Psd, type RGB } from "ag-psd";
+import type { Layer, Psd, RGB } from "ag-psd";
 import type { StudioDocumentState, TextLayer } from "../types/studio";
 import { getCanvasDimensions } from "./studioDefaults";
 
@@ -296,6 +296,7 @@ export async function downloadPsdComposition(
   doc: StudioDocumentState,
   scale: 1 | 2
 ): Promise<void> {
+  const { writePsd } = await import("ag-psd");
   await document.fonts.ready;
 
   const base = getCanvasDimensions(doc.format);

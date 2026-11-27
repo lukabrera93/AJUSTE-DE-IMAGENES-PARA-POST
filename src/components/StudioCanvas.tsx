@@ -101,11 +101,11 @@ export function StudioCanvas({
     };
 
     computeSize();
-    const ro = new ResizeObserver(computeSize);
-    ro.observe(el);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(computeSize) : null;
+    ro?.observe(el);
     window.addEventListener("resize", computeSize);
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
       window.removeEventListener("resize", computeSize);
     };
   }, [activeDoc.format]);

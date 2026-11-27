@@ -64,9 +64,13 @@ function matchFontFamily(requestedName: string, availableFonts: FontAsset[]): st
 export default function App() {
   // Theme state (Dark mode default for nocturnal studio design)
   const [isDark, setIsDark] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    const saved = localStorage.getItem("reticula_theme");
-    return saved ? saved === "dark" : true;
+    try {
+      if (typeof window === "undefined") return true;
+      const saved = window.localStorage.getItem("reticula_theme");
+      return saved ? saved === "dark" : true;
+    } catch {
+      return true;
+    }
   });
 
   useEffect(() => {
@@ -76,7 +80,11 @@ export default function App() {
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem("reticula_theme", isDark ? "dark" : "light");
+    try {
+      window.localStorage.setItem("reticula_theme", isDark ? "dark" : "light");
+    } catch {
+      // Ignore storage restrictions
+    }
   }, [isDark]);
 
   // Unified Bidirectional History & Document State
