@@ -6,7 +6,7 @@ export type TextAlign = "left" | "center" | "right";
 
 export type TextRole = "headline" | "subtitle" | "caption" | "custom";
 
-export type FontFamilyGroup = "display" | "serif" | "sans" | "mono";
+export type FontFamilyGroup = "display" | "serif" | "sans" | "script" | "mono";
 
 export interface FontAsset {
   id: string;

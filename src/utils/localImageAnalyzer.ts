@@ -143,7 +143,7 @@ function measureRegion(
 
 function pickFontByCategory(
   fonts: FontAsset[],
-  preferred: "display" | "serif" | "sans" | "mono",
+  preferred: "display" | "serif" | "sans" | "script" | "mono",
   fallbackName: string
 ): { name: string; isCustom: boolean } {
   const customExact = fonts.find(
@@ -180,12 +180,14 @@ function buildPatternPlacements(
 } {
   const zones = format === "1080x1920" ? pattern.storyZones : pattern.feedZones;
   const isDarkSurface = forceDarkInk === undefined ? zoneLum < 142 : !forceDarkInk;
-  const textColor = isDarkSurface ? "#F8F7F4" : "#181512";
-  const subtitleColor = isDarkSurface ? "#ECE7DE" : "#2F2A24";
+  const textColor = isDarkSurface
+    ? pattern.headlineAccentHex || "#F8F7F4"
+    : "#2D2218";
+  const subtitleColor = isDarkSurface ? "#F4F1EA" : "#3E3226";
 
-  const headlineFont = pickFontByCategory(fonts, pattern.preferredHeadlineCategory, "Oswald");
+  const headlineFont = pickFontByCategory(fonts, pattern.preferredHeadlineCategory, "Bodoni Moda");
   const bodyFont = pickFontByCategory(fonts, pattern.preferredBodyCategory, "Montserrat");
-  const captionFont = pickFontByCategory(fonts, pattern.preferredCaptionCategory, "JetBrains Mono");
+  const captionFont = pickFontByCategory(fonts, pattern.preferredCaptionCategory, "Montserrat");
 
   let scrim: ScrimType = pattern.recommendedScrim;
   let scrimOpacity = pattern.scrimOpacity;
@@ -194,10 +196,10 @@ function buildPatternPlacements(
     scrimOpacity = 0;
   } else if (isDarkSurface && scrim === "none" && zoneEnergy > 14) {
     scrim = zones.headline.y > 50 ? "bottom" : "top";
-    scrimOpacity = Math.min(0.38, 0.16 + zoneEnergy * 0.008);
+    scrimOpacity = Math.min(0.4, 0.18 + zoneEnergy * 0.008);
   }
 
-  const shadowStrength = isDarkSurface ? (zoneEnergy > 14 ? 0.48 : 0.28) : 0;
+  const shadowStrength = isDarkSurface ? (zoneEnergy > 14 ? 0.54 : 0.34) : 0;
 
   const placements: AIPlacement[] = layers.map((layer, idx) => {
     const isHeadline = layer.role === "headline" || idx === 0;
@@ -214,14 +216,27 @@ function buildPatternPlacements(
       ? captionFont.name
       : bodyFont.name;
 
-    const baseSize = isHeadline ? 82 : isCaption ? 22 : 31;
+    const isScriptSubtitle =
+      !isHeadline && !isCaption && pattern.preferredBodyCategory === "script";
+
+    const baseSize = isHeadline
+      ? pattern.zoneStrategy === "center-reel-hook"
+        ? 56
+        : 80
+      : isCaption
+      ? 22
+      : isScriptSubtitle
+      ? 42
+      : 30;
     const fontSize = Math.max(18, Math.round(baseSize * scaleFactor));
     const letterSpacing = isHeadline
       ? pattern.preferredHeadlineCategory === "display"
-        ? 0.01
+        ? 0.02
         : -0.02
+      : isScriptSubtitle
+      ? 0
       : isCaption
-      ? 0.14
+      ? 0.08
       : 0.01;
 
     return {
@@ -231,9 +246,9 @@ function buildPatternPlacements(
       widthPct: targetZone.widthPct,
       fontFamily: chosenFont,
       fontSize,
-      fontWeight: isHeadline ? 700 : 500,
+      fontWeight: isHeadline ? 700 : isScriptSubtitle ? 400 : 500,
       letterSpacing,
-      lineHeight: isHeadline ? 0.98 : isCaption ? 1.2 : 1.32,
+      lineHeight: isHeadline ? 0.98 : isScriptSubtitle ? 1.08 : isCaption ? 1.25 : 1.32,
       textAlign: targetZone.align,
       color: isHeadline ? textColor : subtitleColor,
       shadowStrength,
@@ -339,28 +354,36 @@ export async function analyzeImageLocally(
   const topSafeY = format === "1080x1920" ? 16 : 8;
   const bottomSafeY = format === "1080x1920" ? 56 : 62;
 
-  const zoneTop = measureRegion(lum, grad, gridW, gridH, 8, topSafeY, 82, 26);
+  const zoneTop = measureRegion(lum, grad, gridW, gridH, 8, topSafeY, 82, 24);
+  const zoneTopLeft = measureRegion(lum, grad, gridW, gridH, 7, topSafeY, 58, 24);
+  const zoneTopRight = measureRegion(lum, grad, gridW, gridH, 34, topSafeY, 58, 24);
+  const zoneMidLeft = measureRegion(lum, grad, gridW, gridH, 7, 32, 46, 34);
+  const zoneCenter = measureRegion(lum, grad, gridW, gridH, 12, 38, 76, 24);
   const zoneBottom = measureRegion(lum, grad, gridW, gridH, 8, bottomSafeY, 82, 24);
   const zoneLeft = measureRegion(lum, grad, gridW, gridH, 7, 16, 46, 56);
   const zoneRight = measureRegion(lum, grad, gridW, gridH, 47, 16, 46, 56);
 
-  // Score every food-flyer pattern from our social-media database against this photo
+  // Score every food-flyer pattern (including @elaljibe.marambaia editorial styles) against real pixels
   const scoredPatterns = FOOD_FLYER_PATTERNS.map((pattern) => {
     let zone: ZoneStats = zoneTop;
-    if (pattern.zoneStrategy === "left-flatlay") zone = zoneLeft;
+    if (pattern.zoneStrategy === "top-left-editorial") zone = zoneTopLeft;
+    else if (pattern.zoneStrategy === "top-right-bold") zone = zoneTopRight;
+    else if (pattern.zoneStrategy === "mid-left-column") zone = zoneMidLeft;
+    else if (pattern.zoneStrategy === "center-reel-hook") zone = zoneCenter;
+    else if (pattern.zoneStrategy === "left-flatlay") zone = zoneLeft;
     else if (pattern.zoneStrategy === "right-flatlay") zone = zoneRight;
     else if (pattern.zoneStrategy === "bottom-anchor") zone = zoneBottom;
     else if (pattern.zoneStrategy === "top-hook-bottom-cta") {
       zone = {
         ...zoneTop,
-        score: (zoneTop.score * 0.6 + zoneBottom.score * 0.4),
+        score: zoneTop.score * 0.6 + zoneBottom.score * 0.4,
       };
     }
 
     let lightingBonus = 0;
-    if (pattern.idealLighting === "dark" && overallLum < 115) lightingBonus = 14;
-    if (pattern.idealLighting === "bright" && overallLum >= 135) lightingBonus = 14;
-    if (pattern.idealLighting === "dark" && overallLum >= 145) lightingBonus = -12;
+    if (pattern.idealLighting === "dark" && overallLum < 125) lightingBonus = 14;
+    if (pattern.idealLighting === "bright" && overallLum >= 138) lightingBonus = 14;
+    if (pattern.idealLighting === "dark" && overallLum >= 150) lightingBonus = -12;
     if (pattern.idealLighting === "bright" && overallLum < 105) lightingBonus = -12;
 
     return {
@@ -381,6 +404,17 @@ export async function analyzeImageLocally(
         m.pattern.id !== secondMatch.pattern.id
     ) || scoredPatterns[2];
 
+  const getById = (id: string) =>
+    scoredPatterns.find((m) => m.pattern.id === id) || topMatch;
+
+  const goldTopMatch = getById("aljibe-editorial-gold-top");
+  const scriptPairMatch = getById("aljibe-script-accent-pair");
+  const leftEditorialMatch = getById("aljibe-top-left-editorial");
+  const rightBoldMatch = getById("aljibe-top-right-bold");
+  const midLeftMatch = getById("aljibe-mid-left-column");
+  const reelHookMatch = getById("aljibe-reel-center-hook");
+  const bottomPriceMatch = getById("aljibe-bottom-price-bar");
+
   const topBuild = buildPatternPlacements(
     topMatch.pattern,
     layers,
@@ -388,6 +422,64 @@ export async function analyzeImageLocally(
     fonts,
     topMatch.zone.avgLum,
     topMatch.zone.energy
+  );
+
+  const goldTopBuild = buildPatternPlacements(
+    goldTopMatch.pattern,
+    layers,
+    format,
+    fonts,
+    Math.min(goldTopMatch.zone.avgLum, 118),
+    goldTopMatch.zone.energy
+  );
+
+  const scriptPairBuild = buildPatternPlacements(
+    scriptPairMatch.pattern,
+    layers,
+    format,
+    fonts,
+    Math.min(scriptPairMatch.zone.avgLum, 118),
+    scriptPairMatch.zone.energy
+  );
+
+  const asymmetricMatch =
+    rightBoldMatch.totalScore >= leftEditorialMatch.totalScore
+      ? rightBoldMatch
+      : leftEditorialMatch;
+  const asymmetricBuild = buildPatternPlacements(
+    asymmetricMatch.pattern,
+    layers,
+    format,
+    fonts,
+    asymmetricMatch.zone.avgLum,
+    asymmetricMatch.zone.energy
+  );
+
+  const midLeftBuild = buildPatternPlacements(
+    midLeftMatch.pattern,
+    layers,
+    format,
+    fonts,
+    midLeftMatch.zone.avgLum,
+    midLeftMatch.zone.energy
+  );
+
+  const reelHookBuild = buildPatternPlacements(
+    reelHookMatch.pattern,
+    layers,
+    format,
+    fonts,
+    Math.min(reelHookMatch.zone.avgLum, 120),
+    reelHookMatch.zone.energy
+  );
+
+  const bottomPriceBuild = buildPatternPlacements(
+    bottomPriceMatch.pattern,
+    layers,
+    format,
+    fonts,
+    Math.min(bottomPriceMatch.zone.avgLum, 120),
+    bottomPriceMatch.zone.energy
   );
 
   const airyBuild = buildPatternPlacements(
@@ -400,17 +492,6 @@ export async function analyzeImageLocally(
     0.9
   );
 
-  const contrastBuild = buildPatternPlacements(
-    thirdMatch.pattern,
-    layers,
-    format,
-    fonts,
-    thirdMatch.zone.avgLum,
-    thirdMatch.zone.energy,
-    1,
-    thirdMatch.zone.avgLum >= 142
-  );
-
   const fontLabel = topBuild.usedCustomFont
     ? `priorizando tu fuente "${topBuild.primaryFontName}"`
     : `con "${topBuild.primaryFontName}"`;
@@ -418,39 +499,77 @@ export async function analyzeImageLocally(
   const recommendations: AestheticRecommendation[] = [
     {
       id: "local-rec-1",
-      title: topMatch.pattern.name,
+      title: `Mejor encuadre · ${topMatch.pattern.name}`,
       description: `${topMatch.pattern.sourceInsight} Aplicado ${fontLabel}.`,
       category: "ubicacion",
-      patternSource: `Base gastronomía · ${topMatch.pattern.bestFor}`,
+      patternSource: `Zona libre detectada · ${topMatch.pattern.bestFor}`,
       recommendedScrim: topBuild.scrim,
       scrimOpacity: topBuild.scrimOpacity,
       placements: topBuild.placements,
     },
+    ...(goldTopMatch.pattern.id !== topMatch.pattern.id
+      ? [
+          {
+            id: "local-rec-gold-top",
+            title: goldTopMatch.pattern.name,
+            description: `Titular Didone dorado (#EAD07E) con ${goldTopBuild.primaryFontName}, degradado superior y pie limpio de 3 datos.`,
+            category: "tipografia" as const,
+            patternSource: `Referencia capturas · ${goldTopMatch.pattern.bestFor}`,
+            recommendedScrim: goldTopBuild.scrim,
+            scrimOpacity: goldTopBuild.scrimOpacity,
+            placements: goldTopBuild.placements,
+          },
+        ]
+      : []),
+    {
+      id: "local-rec-script-pair",
+      title: scriptPairMatch.pattern.name,
+      description: `Combina ${scriptPairBuild.primaryFontName} en dorado (#EAD07E) con subtítulo caligráfico blanco (Great Vibes) estilo plato estrella.`,
+      category: "tipografia",
+      patternSource: `Referencia capturas · Suprema / Semana especial`,
+      recommendedScrim: scriptPairBuild.scrim,
+      scrimOpacity: scriptPairBuild.scrimOpacity,
+      placements: scriptPairBuild.placements,
+    },
+    {
+      id: "local-rec-asymmetric",
+      title: asymmetricMatch.pattern.name,
+      description: asymmetricMatch.pattern.sourceInsight,
+      category: "ubicacion",
+      patternSource: `Referencia capturas · ${asymmetricMatch.pattern.bestFor}`,
+      recommendedScrim: asymmetricBuild.scrim,
+      scrimOpacity: asymmetricBuild.scrimOpacity,
+      placements: asymmetricBuild.placements,
+    },
+    {
+      id: "local-rec-mid-left",
+      title: midLeftMatch.pattern.name,
+      description: midLeftMatch.pattern.sourceInsight,
+      category: "ubicacion",
+      patternSource: `Referencia capturas · Feijoada / Pausa del mediodía`,
+      recommendedScrim: midLeftBuild.scrim,
+      scrimOpacity: midLeftBuild.scrimOpacity,
+      placements: midLeftBuild.placements,
+    },
+    {
+      id: "local-rec-reel-hook",
+      title: reelHookMatch.pattern.name,
+      description: reelHookMatch.pattern.sourceInsight,
+      category: "contraste",
+      patternSource: `Referencia capturas · Portadas Reel / Carrusel`,
+      recommendedScrim: reelHookBuild.scrim,
+      scrimOpacity: reelHookBuild.scrimOpacity,
+      placements: reelHookBuild.placements,
+    },
     {
       id: "local-rec-2",
       title: `Respiro visual · ${secondMatch.pattern.name}`,
-      description: `Reduce la escala un 10% y aprovecha la zona más limpia sin cubrir el foco del plato.`,
+      description: `Reduce la escala un 10% para dar mayor aire alrededor del plato sin perder jerarquía.`,
       category: "respiracion",
-      patternSource: `Base gastronomía · ${secondMatch.pattern.bestFor}`,
+      patternSource: `Alternativa de respiro · ${secondMatch.pattern.bestFor}`,
       recommendedScrim: airyBuild.scrim,
       scrimOpacity: airyBuild.scrimOpacity,
       placements: airyBuild.placements,
-    },
-    {
-      id: "local-rec-3",
-      title:
-        thirdMatch.zone.avgLum >= 142
-          ? "Tinta oscura editorial sobre foto clara"
-          : "Alto contraste gastronómico con velo",
-      description:
-        thirdMatch.zone.avgLum >= 142
-          ? "Conserva la frescura de la luz natural usando tipografía oscura sin oscurecer el plato."
-          : "Degradado direccional sutil para despegar precios, título y CTA en pantallas móviles.",
-      category: "contraste",
-      patternSource: `Base gastronomía · ${thirdMatch.pattern.name}`,
-      recommendedScrim: contrastBuild.scrim,
-      scrimOpacity: contrastBuild.scrimOpacity,
-      placements: contrastBuild.placements,
     },
   ];
 
@@ -468,10 +587,10 @@ export async function analyzeImageLocally(
     }));
     recommendations.unshift({
       id: "local-rec-palette",
-      title: "Tu paleta de colores + Flyer Gastronómico",
-      description: `Combina tus tonos (${headlineColor}${secondaryColor !== headlineColor ? ` y ${secondaryColor}` : ""}) sobre la mejor zona libre de la foto.`,
+      title: "Tu paleta de colores + Encuadre recomendado",
+      description: `Aplica tus tonos (${headlineColor}${secondaryColor !== headlineColor ? ` y ${secondaryColor}` : ""}) sobre la mejor zona libre de la foto.`,
       category: "contraste",
-      patternSource: `Paleta subida · ${topMatch.pattern.name}`,
+      patternSource: `Paleta activa · ${topMatch.pattern.name}`,
       recommendedScrim: topBuild.scrim,
       scrimOpacity: topBuild.scrimOpacity,
       placements: palettePlacements,
@@ -487,24 +606,51 @@ export async function analyzeImageLocally(
     secondMatch.zone.energy
   );
 
+  const prop3Build = buildPatternPlacements(
+    thirdMatch.pattern,
+    layers,
+    format,
+    fonts,
+    thirdMatch.zone.avgLum,
+    thirdMatch.zone.energy
+  );
+
   const proposals: LayoutProposal[] = [
     {
       id: "local-prop-1",
       title: topMatch.pattern.name,
-      rationale: `${topMatch.pattern.bestFor} Detectada menor carga visual en esta zona (${Math.round(topMatch.zone.avgLum)} lum).`,
-      patternSource: topMatch.pattern.name,
+      rationale: `${topMatch.pattern.bestFor} Zona con menor carga visual detectada (${Math.round(topMatch.zone.avgLum)} lum).`,
+      patternSource: `Referencia capturas · ${topMatch.pattern.name}`,
       recommendedScrim: topBuild.scrim,
       scrimOpacity: topBuild.scrimOpacity,
       placements: topBuild.placements,
     },
     {
       id: "local-prop-2",
-      title: secondMatch.pattern.name,
-      rationale: `${secondMatch.pattern.sourceInsight}`,
-      patternSource: secondMatch.pattern.name,
-      recommendedScrim: prop2Build.scrim,
-      scrimOpacity: prop2Build.scrimOpacity,
-      placements: prop2Build.placements,
+      title: scriptPairMatch.pattern.name,
+      rationale: scriptPairMatch.pattern.sourceInsight,
+      patternSource: "Referencia capturas · Titular Dorado + Caligráfica",
+      recommendedScrim: scriptPairBuild.scrim,
+      scrimOpacity: scriptPairBuild.scrimOpacity,
+      placements: scriptPairBuild.placements,
+    },
+    {
+      id: "local-prop-3",
+      title: bottomPriceMatch.pattern.name,
+      rationale: bottomPriceMatch.pattern.sourceInsight,
+      patternSource: "Referencia capturas · Cierre inferior con oferta/horario",
+      recommendedScrim: bottomPriceBuild.scrim,
+      scrimOpacity: bottomPriceBuild.scrimOpacity,
+      placements: bottomPriceBuild.placements,
+    },
+    {
+      id: "local-prop-4",
+      title: secondMatch.pattern.id === topMatch.pattern.id ? thirdMatch.pattern.name : secondMatch.pattern.name,
+      rationale: secondMatch.pattern.id === topMatch.pattern.id ? thirdMatch.pattern.sourceInsight : secondMatch.pattern.sourceInsight,
+      patternSource: `Referencia capturas · Alternativa asimétrica`,
+      recommendedScrim: (secondMatch.pattern.id === topMatch.pattern.id ? prop3Build : prop2Build).scrim,
+      scrimOpacity: (secondMatch.pattern.id === topMatch.pattern.id ? prop3Build : prop2Build).scrimOpacity,
+      placements: (secondMatch.pattern.id === topMatch.pattern.id ? prop3Build : prop2Build).placements,
     },
   ];
 

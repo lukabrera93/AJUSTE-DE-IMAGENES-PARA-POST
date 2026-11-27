@@ -33,6 +33,12 @@ export const FONT_FAMILY_GROUPS: {
     description: "Subtítulos, ingredientes, precios y detalles",
   },
   {
+    id: "script",
+    label: "Caligráfica / Script",
+    shortLabel: "Script",
+    description: "Acentos manuscritos y firmas sobre titulares",
+  },
+  {
     id: "mono",
     label: "Monoespaciada / Técnica",
     shortLabel: "Mono",
@@ -45,6 +51,7 @@ export function resolveFontFamilyGroup(font: FontAsset): FontFamilyGroup {
     font.category === "display" ||
     font.category === "serif" ||
     font.category === "sans" ||
+    font.category === "script" ||
     font.category === "mono"
   ) {
     return font.category;
@@ -87,6 +94,13 @@ export const BUILTIN_FONTS: FontAsset[] = [
     isCustom: false,
   },
   {
+    id: "builtin-bodoni",
+    name: "Bodoni Moda",
+    family: '"Bodoni Moda", Georgia, serif',
+    category: "serif",
+    isCustom: false,
+  },
+  {
     id: "builtin-playfair",
     name: "Playfair Display",
     family: '"Playfair Display", Georgia, serif',
@@ -105,6 +119,13 @@ export const BUILTIN_FONTS: FontAsset[] = [
     name: "Lora",
     family: '"Lora", Georgia, serif',
     category: "serif",
+    isCustom: false,
+  },
+  {
+    id: "builtin-great-vibes",
+    name: "Great Vibes",
+    family: '"Great Vibes", cursive',
+    category: "script",
     isCustom: false,
   },
   {

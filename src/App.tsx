@@ -36,9 +36,7 @@ import {
 import {
   BUILTIN_FONTS,
   INITIAL_STUDIO_STATE,
-  imageSrcToOptimizedBase64,
 } from "./utils/studioDefaults";
-import { FOOD_FLYER_AI_SUMMARY } from "./data/foodFlyerLayouts";
 import { analyzeImageLocally } from "./utils/localImageAnalyzer";
 
 type SidePanelMode = "none" | "assets" | "ai" | "text" | "controls";
@@ -138,67 +136,10 @@ export default function App() {
   const [mobileSidePanel, setMobileSidePanel] = useState<SidePanelMode>("none");
   const [isExportOpen, setIsExportOpen] = useState(false);
 
-  // AI Analysis & optional API server connection state
+  // Local Layout Recommendations state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [aiEndpointBase, setAiEndpointBase] = useState<string>(() => {
-    try {
-      return window.localStorage.getItem("reticula_ai_endpoint_base") || "";
-    } catch {
-      return "";
-    }
-  });
-  const [aiServerStatus, setAiServerStatus] = useState<
-    "checking" | "ready" | "missing_key" | "offline"
-  >("checking");
-
-  const normalizeAiBase = useCallback(
-    (raw: string) => raw.trim().replace(/\/+$/, ""),
-    []
-  );
-
-  const refreshAiStatus = useCallback(
-    async (baseOverride?: string) => {
-      const base = normalizeAiBase(baseOverride ?? aiEndpointBase);
-      setAiServerStatus("checking");
-      try {
-        const res = await fetch(`${base}/api/health`, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-        });
-        const ct = res.headers.get("content-type") || "";
-        if (!res.ok || !ct.includes("application/json")) {
-          setAiServerStatus("offline");
-          return;
-        }
-        const data = (await res.json()) as { ok?: boolean; aiConfigured?: boolean };
-        if (data.ok && data.aiConfigured) {
-          setAiServerStatus("ready");
-        } else if (data.ok) {
-          setAiServerStatus("missing_key");
-        } else {
-          setAiServerStatus("offline");
-        }
-      } catch {
-        setAiServerStatus("offline");
-      }
-    },
-    [aiEndpointBase, normalizeAiBase]
-  );
-
-  useEffect(() => {
-    refreshAiStatus();
-  }, [refreshAiStatus]);
-
-  const handleChangeAiEndpointBase = (nextUrl: string) => {
-    setAiEndpointBase(nextUrl);
-    try {
-      window.localStorage.setItem("reticula_ai_endpoint_base", nextUrl);
-    } catch {
-      // Ignore storage errors
-    }
-  };
 
   // Preview-before-confirm state
   const [previewSession, setPreviewSession] = useState<PreviewSession | null>(null);
@@ -445,6 +386,12 @@ export default function App() {
     saveCustomPalette(null);
   };
 
+  const handleApplyPresetPalette = (palette: CustomPalette) => {
+    setPaletteError(null);
+    setCustomPalette(palette);
+    saveCustomPalette(palette);
+  };
+
   const handleApplyColorToSelected = (hex: string) => {
     const targetId = selectedLayerId || docState.layers[0]?.id;
     if (!targetId) return;
@@ -661,98 +608,7 @@ export default function App() {
       }
     } catch (err) {
       setAnalysisError(
-        err instanceof Error ? err.message : "No se pudo analizar la imagen localmente."
-      );
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  // Optional Server AI Image Analysis
-  const handleAnalyzeImage = async () => {
-    setIsAnalyzing(true);
-    setAnalysisError(null);
-    setInspectorTab("ai");
-    if (window.innerWidth < 1024) {
-      setMobileSidePanel("ai");
-    }
-
-    try {
-      const base = normalizeAiBase(aiEndpointBase);
-      const { base64, mimeType } = await imageSrcToOptimizedBase64(docState.image.src);
-      const response = await fetch(`${base}/api/analyze-layout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: base64,
-          mimeType,
-          aspectRatio: docState.format,
-          fonts: allFonts.map((f) => ({
-            id: f.id,
-            name: f.name,
-            category: f.category,
-            isCustom: f.isCustom,
-          })),
-          textLayers: docState.layers.map((l) => ({
-            id: l.id,
-            role: l.role,
-            text: l.text,
-          })),
-          customColors: customPalette?.colors ?? [],
-          foodFlyerPatterns: FOOD_FLYER_AI_SUMMARY,
-        }),
-      });
-
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        throw new Error(
-          "El análisis automático por IA requiere el servidor activo. En GitHub Pages estático puedes seguir subiendo imágenes y fuentes, editar textos en tiempo real y exportar en PNG, JPG o PSD."
-        );
-      }
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "No se pudo completar el análisis.");
-      }
-
-      const result = data as AnalysisResult;
-      setAnalysisResult(result);
-
-      // Automatically preview the top recommendation if available, otherwise first proposal
-      if (result.recommendations && result.recommendations.length > 0) {
-        const firstRec = result.recommendations[0];
-        const candidateState = buildStateFromPlacements(
-          firstRec.placements,
-          firstRec.recommendedScrim,
-          firstRec.scrimOpacity
-        );
-        setIsComparingOriginal(false);
-        setPreviewSession({
-          title: firstRec.title,
-          subtitle: firstRec.description,
-          candidateState,
-          focalZone: result.focalZone,
-          proposalId: firstRec.id,
-        });
-      } else if (result.proposals && result.proposals.length > 0) {
-        const first = result.proposals[0];
-        const candidateState = buildStateFromPlacements(
-          first.placements,
-          first.recommendedScrim,
-          first.scrimOpacity
-        );
-        setIsComparingOriginal(false);
-        setPreviewSession({
-          title: first.title,
-          subtitle: first.rationale,
-          candidateState,
-          focalZone: result.focalZone,
-          proposalId: first.id,
-        });
-      }
-    } catch (err) {
-      setAnalysisError(
-        err instanceof Error ? err.message : "Error inesperado al analizar la imagen."
+        err instanceof Error ? err.message : "No se pudo analizar la imagen."
       );
     } finally {
       setIsAnalyzing(false);
@@ -922,6 +778,7 @@ export default function App() {
             onRemovePaletteColor={handleRemovePaletteColor}
             onClearPalette={handleClearPalette}
             onApplyColorToSelected={handleApplyColorToSelected}
+            onApplyPresetPalette={handleApplyPresetPalette}
           />
         </aside>
 
@@ -956,14 +813,9 @@ export default function App() {
             activeTab={inspectorTab}
             onChangeTab={setInspectorTab}
             onAnalyzeLocal={handleAnalyzeLocal}
-            onAnalyzeImage={handleAnalyzeImage}
             isAnalyzing={isAnalyzing}
             analysisError={analysisError}
             analysisResult={analysisResult}
-            aiServerStatus={aiServerStatus}
-            aiEndpointBase={aiEndpointBase}
-            onChangeAiEndpointBase={handleChangeAiEndpointBase}
-            onRefreshAiStatus={() => refreshAiStatus()}
             activePreviewId={previewSession?.proposalId}
             onExecuteRecommendation={handleExecuteRecommendation}
             onPreviewProposal={handlePreviewProposal}
@@ -1034,6 +886,7 @@ export default function App() {
                     onRemovePaletteColor={handleRemovePaletteColor}
                     onClearPalette={handleClearPalette}
                     onApplyColorToSelected={handleApplyColorToSelected}
+                    onApplyPresetPalette={handleApplyPresetPalette}
                   />
                 ) : (
                   <InspectorPanel
@@ -1049,14 +902,9 @@ export default function App() {
                       setMobileSidePanel(t);
                     }}
                     onAnalyzeLocal={handleAnalyzeLocal}
-                    onAnalyzeImage={handleAnalyzeImage}
                     isAnalyzing={isAnalyzing}
                     analysisError={analysisError}
                     analysisResult={analysisResult}
-                    aiServerStatus={aiServerStatus}
-                    aiEndpointBase={aiEndpointBase}
-                    onChangeAiEndpointBase={handleChangeAiEndpointBase}
-                    onRefreshAiStatus={() => refreshAiStatus()}
                     activePreviewId={previewSession?.proposalId}
                     onExecuteRecommendation={handleExecuteRecommendation}
                     onPreviewProposal={handlePreviewProposal}
@@ -1112,7 +960,7 @@ export default function App() {
                   ? "bg-blue-600 text-white"
                   : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200/70 dark:hover:bg-neutral-800"
               }`}
-              title="Recomendaciones de estética"
+              title="Recomendaciones"
             >
               <Sparkles className="w-4 h-4" />
               <span>Ideas</span>

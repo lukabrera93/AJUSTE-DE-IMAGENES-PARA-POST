@@ -17,6 +17,9 @@ export function inferFontCategory(name: string): FontFamilyGroup {
   if (/(mono|code|courier|consolas|jetbrains|fira|terminal|typewriter)/.test(lower)) {
     return "mono";
   }
+  if (/(script|brush|cursive|callig|hand|signature|vibes|dancing|pacifico|sacramento)/.test(lower)) {
+    return "script";
+  }
   if (/(serif|garamond|playfair|bodoni|didot|times|lora|baskerville|georgia|caslon|merriweather|slab)/.test(lower)) {
     return "serif";
   }

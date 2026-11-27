@@ -46,6 +46,7 @@ interface AssetPanelProps {
   onRemovePaletteColor: (hex: string) => void;
   onClearPalette: () => void;
   onApplyColorToSelected: (hex: string) => void;
+  onApplyPresetPalette: (palette: CustomPalette) => void;
 }
 
 const SCRIM_OPTIONS: { id: ScrimType; label: string }[] = [
@@ -75,6 +76,7 @@ export function AssetPanel({
   onRemovePaletteColor,
   onClearPalette,
   onApplyColorToSelected,
+  onApplyPresetPalette,
 }: AssetPanelProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
@@ -739,6 +741,24 @@ export function AssetPanel({
             <span>Añadir</span>
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() =>
+            onApplyPresetPalette({
+              name: "El Aljibe · Dorado & Grafito",
+              colors: ["#EAD07E", "#D4A359", "#FFFFFF", "#F5EFE6", "#141210", "#3A2B1C"],
+            })
+          }
+          className="w-full py-1.5 px-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#161A22] hover:bg-neutral-100 dark:hover:bg-neutral-800 text-[11px] font-medium text-neutral-700 dark:text-neutral-200 flex items-center justify-between gap-2 cursor-pointer transition-colors"
+        >
+          <span>Cargar paleta El Aljibe</span>
+          <span className="flex items-center gap-1" aria-hidden="true">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#EAD07E]" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FFFFFF] border border-neutral-300" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#141210]" />
+          </span>
+        </button>
 
         {paletteError && (
           <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-2">

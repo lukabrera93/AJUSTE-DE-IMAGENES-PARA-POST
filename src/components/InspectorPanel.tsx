@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -11,9 +10,6 @@ import {
   Play,
   Plus,
   Redo2,
-  RefreshCw,
-  Server,
-  Sparkles,
   Trash2,
   Undo2,
   Wand2,
@@ -37,14 +33,9 @@ interface InspectorPanelProps {
   onChangeTab: (tab: InspectorTab) => void;
   // Recommendations tab
   onAnalyzeLocal: () => void;
-  onAnalyzeImage: () => void;
   isAnalyzing: boolean;
   analysisError: string | null;
   analysisResult: AnalysisResult | null;
-  aiServerStatus: "checking" | "ready" | "missing_key" | "offline";
-  aiEndpointBase: string;
-  onChangeAiEndpointBase: (url: string) => void;
-  onRefreshAiStatus: () => void;
   activePreviewId?: string;
   onExecuteRecommendation: (rec: AestheticRecommendation) => void;
   onPreviewProposal: (proposal: LayoutProposal) => void;
@@ -89,14 +80,9 @@ export function InspectorPanel({
   activeTab,
   onChangeTab,
   onAnalyzeLocal,
-  onAnalyzeImage,
   isAnalyzing,
   analysisError,
   analysisResult,
-  aiServerStatus,
-  aiEndpointBase,
-  onChangeAiEndpointBase,
-  onRefreshAiStatus,
   activePreviewId,
   onExecuteRecommendation,
   onPreviewProposal,
@@ -120,7 +106,6 @@ export function InspectorPanel({
   onPreviewVersion,
   onJumpToHistoryIndex,
 }: InspectorPanelProps) {
-  const [showAiOptions, setShowAiOptions] = useState(false);
   const selectedLayer = layers.find((l) => l.id === selectedLayerId) || layers[0] || null;
   const customFonts = fonts.filter((f) => f.isCustom);
   const groupedFontFamilies = groupFontsByFamily(fonts);
@@ -192,108 +177,21 @@ export function InspectorPanel({
           <div className="space-y-4">
             <div className="space-y-2.5">
               <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Usa la base gastronómica de flyers (patrones F/Z, zonas seguras y espacios negativos) sin IA con{" "}
+                Detecta espacios libres y contraste en tu foto para proponer ubicaciones y tipografías editoriales con{" "}
                 {customFonts.length > 0
                   ? `tus ${customFonts.length} fuentes subidas.`
-                  : "tipografías agrupadas por familia."}
+                  : "las fuentes del estudio."}
               </p>
 
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  disabled={isAnalyzing}
-                  onClick={onAnalyzeLocal}
-                  className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer min-h-[42px]"
-                >
-                  <Wand2 className="w-4 h-4 shrink-0" />
-                  <span>Analizar y recomendar (Sin IA)</span>
-                </button>
-
-                <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-[#161A22] p-2.5 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAiOptions((v) => !v)}
-                      className="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                    >
-                      <Server className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      <span>IA opcional vía API servidor</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAiOptions((v) => !v)}
-                      className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                    >
-                      {showAiOptions ? "Ocultar" : "Configurar"}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 text-[10px]">
-                    <span
-                      className={
-                        aiServerStatus === "ready"
-                          ? "text-emerald-600 dark:text-emerald-400 font-medium"
-                          : aiServerStatus === "missing_key"
-                          ? "text-amber-600 dark:text-amber-400 font-medium"
-                          : aiServerStatus === "checking"
-                          ? "text-neutral-500 dark:text-neutral-400"
-                          : "text-neutral-500 dark:text-neutral-400"
-                      }
-                    >
-                      {aiServerStatus === "ready"
-                        ? "API conectada y lista para analizar"
-                        : aiServerStatus === "missing_key"
-                        ? "Servidor activo · falta GEMINI_API_KEY en el servidor"
-                        : aiServerStatus === "checking"
-                        ? "Comprobando conexión API..."
-                        : "Sin servidor API conectado (modo local activo)"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={onRefreshAiStatus}
-                      className="inline-flex items-center gap-1 text-neutral-600 dark:text-neutral-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer shrink-0"
-                      title="Comprobar estado del servidor API"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Comprobar</span>
-                    </button>
-                  </div>
-
-                  {showAiOptions && (
-                    <div className="pt-1.5 border-t border-neutral-200 dark:border-neutral-800 space-y-2">
-                      <label className="block space-y-1">
-                        <span className="text-[10px] font-medium text-neutral-600 dark:text-neutral-400">
-                          URL de servidor proxy API (opcional para GitHub Pages)
-                        </span>
-                        <input
-                          type="url"
-                          value={aiEndpointBase}
-                          onChange={(e) => onChangeAiEndpointBase(e.target.value)}
-                          placeholder="Vacío = mismo servidor (/api)"
-                          className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#111419] px-2.5 py-1.5 text-[11px] text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                        />
-                      </label>
-                      <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                        Por seguridad, la clave <span className="font-mono">GEMINI_API_KEY</span> se configura en el servidor (<span className="font-mono">Settings &gt; Secrets</span> o <span className="font-mono">.env</span>) y nunca en el navegador.
-                      </p>
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    disabled={isAnalyzing}
-                    onClick={onAnalyzeImage}
-                    className="w-full py-2 px-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#111419] hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-60 text-neutral-800 dark:text-neutral-100 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[36px]"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 shrink-0 text-blue-500" />
-                    <span>
-                      {isAnalyzing
-                        ? "Consultando IA..."
-                        : "Analizar con IA (API servidor)"}
-                    </span>
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                disabled={isAnalyzing}
+                onClick={onAnalyzeLocal}
+                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer min-h-[42px]"
+              >
+                <Wand2 className="w-4 h-4 shrink-0" />
+                <span>{isAnalyzing ? "Analizando..." : "Recomendaciones"}</span>
+              </button>
             </div>
 
             {analysisError && (
@@ -370,7 +268,7 @@ export function InspectorPanel({
                 {analysisResult.recommendations && analysisResult.recommendations.length > 0 && (
                   <div className="space-y-2.5">
                     <div className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
-                      Recomendaciones de estética limpia
+                      Recomendaciones
                     </div>
                     {analysisResult.recommendations.map((rec) => {
                       const isActive = activePreviewId === rec.id;
@@ -484,9 +382,9 @@ export function InspectorPanel({
                   Cómo funciona
                 </div>
                 <ol className="text-[11px] text-neutral-600 dark:text-neutral-400 space-y-1.5 list-decimal list-inside leading-relaxed">
-                  <li>Sube tu imagen y fuentes en el panel de Imagen/Fuentes.</li>
-                  <li>Pulsa Analizar imagen para recibir recomendaciones de estética limpia ejecutables.</li>
-                  <li>Ejecuta cualquier recomendación para visualizarla al instante antes de confirmar.</li>
+                  <li>Sube tu imagen, paleta y fuentes en el panel izquierdo.</li>
+                  <li>Pulsa Recomendaciones para obtener ubicaciones y estilos listos para aplicar.</li>
+                  <li>Ejecuta cualquier opción para previsualizarla al instante antes de confirmar.</li>
                 </ol>
               </div>
             )}

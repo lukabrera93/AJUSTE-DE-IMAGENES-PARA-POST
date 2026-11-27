@@ -14,13 +14,24 @@ export interface FoodFlyerPattern {
   bestFor: string;
   idealLighting: "dark" | "bright" | "any";
   preferredHeadlineCategory: "display" | "serif" | "sans";
-  preferredBodyCategory: "sans" | "serif";
-  preferredCaptionCategory: "mono" | "sans";
+  preferredBodyCategory: "sans" | "serif" | "script";
+  preferredCaptionCategory: "mono" | "sans" | "script";
   recommendedScrim: ScrimType;
   scrimOpacity: number;
   headlineUppercase?: boolean;
+  /** Signature dark-surface headline tint (e.g. Champagne Gold #EAD07E) */
+  headlineAccentHex?: string;
   /** Preferred candidate zone weights evaluated against real image pixels */
-  zoneStrategy: "top-hook-bottom-cta" | "top-center-stacked" | "left-flatlay" | "right-flatlay" | "bottom-anchor";
+  zoneStrategy:
+    | "top-hook-bottom-cta"
+    | "top-center-stacked"
+    | "top-left-editorial"
+    | "top-right-bold"
+    | "mid-left-column"
+    | "center-reel-hook"
+    | "left-flatlay"
+    | "right-flatlay"
+    | "bottom-anchor";
   accentHint: string;
   feedZones: {
     headline: FoodFlyerZoneSpec;
@@ -35,151 +46,190 @@ export interface FoodFlyerPattern {
 }
 
 /**
- * Curated database of proven social-media food flyer text-placement architectures
- * (1080x1350 Feed 4:5 & 1080x1920 Stories/Reels 9:16), synthesizing F/Z-pattern
- * scanning, Instagram UI safe-zone margins, dark-moody editorial hierarchy, and
- * flat-lay negative-space framing.
+ * Curated Gastronomy & Visual System Database modeled from the @elaljibe.marambaia
+ * screenshot references: Didone Serif in Champagne Gold (#EAD07E), Script accents,
+ * clean Sans-Serif kickers/subtitles in #FFFFFF, 3-column info footers, asymmetric
+ * left/right dish framing, and centered Reel cover hooks.
  */
 export const FOOD_FLYER_PATTERNS: FoodFlyerPattern[] = [
   {
-    id: "food-z-hook-cta",
-    name: "Patrón Z · Gancho Superior + CTA Inferior",
-    sourceInsight: "Estándar de flyers gastronómicos: lectura en Z con gancho arriba, plato protagonista al centro y llamado a la acción abajo.",
-    bestFor: "Promos 2x1, lanzamientos de hamburguesas, pizzas o combos con foto centrada.",
-    idealLighting: "any",
-    preferredHeadlineCategory: "display",
-    preferredBodyCategory: "sans",
-    preferredCaptionCategory: "mono",
-    recommendedScrim: "top",
-    scrimOpacity: 0.34,
-    headlineUppercase: true,
-    zoneStrategy: "top-hook-bottom-cta",
-    accentHint: "#F4B942",
-    feedZones: {
-      headline: { x: 8, y: 7, widthPct: 84, align: "center" },
-      subtitle: { x: 12, y: 18, widthPct: 76, align: "center" },
-      caption: { x: 10, y: 86, widthPct: 80, align: "center" },
-    },
-    storyZones: {
-      headline: { x: 8, y: 16, widthPct: 84, align: "center" },
-      subtitle: { x: 12, y: 26, widthPct: 76, align: "center" },
-      caption: { x: 10, y: 75, widthPct: 80, align: "center" },
-    },
-  },
-  {
-    id: "food-dark-moody-editorial",
-    name: "Gourmet Nocturno · Dark & Moody",
-    sourceInsight: "Arquitectura en 3 niveles para alta cocina, cortes o coctelería: kicker superior espaciado, título serif de alto contraste y detalle discreto.",
-    bestFor: "Fotografía culinaria oscura o iluminación direccional (claroscuro).",
+    id: "aljibe-editorial-gold-top",
+    name: "Titular Dorado Arriba + Pie 3 Datos",
+    sourceInsight:
+      "Inspirado en Descubrir / Domingo / Koygua'i: titular Serif Didone en dorado (#EAD07E) centrado arriba, bajada limpia debajo y datos al pie sobre degradado oscuro.",
+    bestFor: "Platos centrados con aire en el tercio superior.",
     idealLighting: "dark",
     preferredHeadlineCategory: "serif",
     preferredBodyCategory: "sans",
-    preferredCaptionCategory: "mono",
-    recommendedScrim: "radial",
-    scrimOpacity: 0.32,
+    preferredCaptionCategory: "sans",
+    recommendedScrim: "top",
+    scrimOpacity: 0.44,
     headlineUppercase: false,
+    headlineAccentHex: "#EAD07E",
     zoneStrategy: "top-center-stacked",
-    accentHint: "#E8C589",
+    accentHint: "#EAD07E",
     feedZones: {
-      headline: { x: 8, y: 11, widthPct: 80, align: "left" },
-      subtitle: { x: 8, y: 24, widthPct: 68, align: "left" },
-      caption: { x: 8, y: 87, widthPct: 70, align: "left" },
+      headline: { x: 8, y: 8, widthPct: 84, align: "center" },
+      subtitle: { x: 14, y: 20, widthPct: 72, align: "center" },
+      caption: { x: 10, y: 88, widthPct: 80, align: "center" },
     },
     storyZones: {
-      headline: { x: 8, y: 18, widthPct: 82, align: "left" },
-      subtitle: { x: 8, y: 29, widthPct: 72, align: "left" },
-      caption: { x: 8, y: 76, widthPct: 72, align: "left" },
+      headline: { x: 8, y: 16, widthPct: 84, align: "center" },
+      subtitle: { x: 14, y: 27, widthPct: 72, align: "center" },
+      caption: { x: 10, y: 76, widthPct: 80, align: "center" },
     },
   },
   {
-    id: "food-flatlay-left",
-    name: "Plano Cenital · Columna Izquierda",
-    sourceInsight: "Aprovecha el espacio negativo izquierdo en tomas cenitales (flat-lay) o mesas servidas para apilar menú y precio sin tapar el plato.",
-    bestFor: "Mesas con varios platos, brunch, sushi o tablas vistas desde arriba.",
+    id: "aljibe-script-accent-pair",
+    name: "Editorial Dorado + Acento Caligráfico",
+    sourceInsight:
+      "Inspirado en Suprema Cordon Bleu / Semana especial / 5 Motivos Sabor: titular Didone en dorado (#EAD07E) combinado con subtítulo cursivo blanco y pie ordenado.",
+    bestFor: "Especialidades de la casa, platos estrella y fechas especiales.",
+    idealLighting: "dark",
+    preferredHeadlineCategory: "serif",
+    preferredBodyCategory: "script",
+    preferredCaptionCategory: "sans",
+    recommendedScrim: "top",
+    scrimOpacity: 0.42,
+    headlineUppercase: false,
+    headlineAccentHex: "#EAD07E",
+    zoneStrategy: "top-center-stacked",
+    accentHint: "#EAD07E",
+    feedZones: {
+      headline: { x: 8, y: 7, widthPct: 84, align: "center" },
+      subtitle: { x: 14, y: 17, widthPct: 72, align: "center" },
+      caption: { x: 10, y: 88, widthPct: 80, align: "center" },
+    },
+    storyZones: {
+      headline: { x: 8, y: 15, widthPct: 84, align: "center" },
+      subtitle: { x: 14, y: 24, widthPct: 72, align: "center" },
+      caption: { x: 10, y: 76, widthPct: 80, align: "center" },
+    },
+  },
+  {
+    id: "aljibe-top-left-editorial",
+    name: "Encabezado Izquierdo · Menú Ejecutivo",
+    sourceInsight:
+      "Inspirado en Pappardelle Salteado / Chop Suey / Espagueti parisieno: titular arriba a la izquierda, descripción breve debajo y barra inferior limpia.",
+    bestFor: "Menús ejecutivos y platos fotografiados en ángulo hacia la derecha.",
     idealLighting: "any",
+    preferredHeadlineCategory: "serif",
+    preferredBodyCategory: "sans",
+    preferredCaptionCategory: "sans",
+    recommendedScrim: "top",
+    scrimOpacity: 0.4,
+    headlineUppercase: true,
+    headlineAccentHex: "#EAD07E",
+    zoneStrategy: "top-left-editorial",
+    accentHint: "#EAD07E",
+    feedZones: {
+      headline: { x: 7, y: 8, widthPct: 74, align: "left" },
+      subtitle: { x: 7, y: 20, widthPct: 60, align: "left" },
+      caption: { x: 7, y: 88, widthPct: 86, align: "left" },
+    },
+    storyZones: {
+      headline: { x: 7, y: 16, widthPct: 76, align: "left" },
+      subtitle: { x: 7, y: 27, widthPct: 64, align: "left" },
+      caption: { x: 7, y: 76, widthPct: 86, align: "left" },
+    },
+  },
+  {
+    id: "aljibe-top-right-bold",
+    name: "Bloque Bold Derecha · Plato a la Izquierda",
+    sourceInsight:
+      "Inspirado en Chupín Gratinado / Chop Suey en plato oscuro: titular Display blanco compacto arriba a la derecha despejando todo el plato del primer plano.",
+    bestFor: "Platos ubicados abajo-izquierda con fondo oscuro arriba a la derecha.",
+    idealLighting: "dark",
     preferredHeadlineCategory: "display",
     preferredBodyCategory: "sans",
     preferredCaptionCategory: "sans",
-    recommendedScrim: "none",
-    scrimOpacity: 0,
-    headlineUppercase: false,
-    zoneStrategy: "left-flatlay",
+    recommendedScrim: "top",
+    scrimOpacity: 0.36,
+    headlineUppercase: true,
+    headlineAccentHex: "#FFFFFF",
+    zoneStrategy: "top-right-bold",
     accentHint: "#FFFFFF",
     feedZones: {
-      headline: { x: 7, y: 14, widthPct: 48, align: "left" },
-      subtitle: { x: 7, y: 31, widthPct: 45, align: "left" },
-      caption: { x: 7, y: 84, widthPct: 48, align: "left" },
+      headline: { x: 34, y: 7, widthPct: 58, align: "right" },
+      subtitle: { x: 42, y: 22, widthPct: 50, align: "right" },
+      caption: { x: 32, y: 88, widthPct: 60, align: "right" },
     },
     storyZones: {
-      headline: { x: 7, y: 20, widthPct: 50, align: "left" },
-      subtitle: { x: 7, y: 34, widthPct: 48, align: "left" },
-      caption: { x: 7, y: 74, widthPct: 50, align: "left" },
+      headline: { x: 32, y: 16, widthPct: 60, align: "right" },
+      subtitle: { x: 40, y: 29, widthPct: 52, align: "right" },
+      caption: { x: 32, y: 76, widthPct: 60, align: "right" },
     },
   },
   {
-    id: "food-flatlay-right",
-    name: "Asimetría Derecha · Menú & Precio",
-    sourceInsight: "Alineación a la derecha en la zona de respiro opuesta al plato principal para destacar nombre del menú, ingredientes y pedido.",
-    bestFor: "Platos encuadrados a la izquierda con fondo limpio hacia la derecha.",
+    id: "aljibe-mid-left-column",
+    name: "Columna Media Izquierda · Plato a la Derecha",
+    sourceInsight:
+      "Inspirado en Feijoada de El Aljibe y Pausa del mediodía: bloque apilado en el lateral izquierdo a media altura dejando libre el bowl o plato derecho.",
+    bestFor: "Bowls y platos servidos hacia la derecha con fondo libre a la izquierda.",
     idealLighting: "any",
     preferredHeadlineCategory: "serif",
     preferredBodyCategory: "sans",
-    preferredCaptionCategory: "mono",
-    recommendedScrim: "none",
-    scrimOpacity: 0,
+    preferredCaptionCategory: "sans",
+    recommendedScrim: "radial",
+    scrimOpacity: 0.28,
     headlineUppercase: false,
-    zoneStrategy: "right-flatlay",
-    accentHint: "#FFFFFF",
+    headlineAccentHex: "#EAD07E",
+    zoneStrategy: "mid-left-column",
+    accentHint: "#EAD07E",
     feedZones: {
-      headline: { x: 45, y: 14, widthPct: 48, align: "right" },
-      subtitle: { x: 47, y: 31, widthPct: 46, align: "right" },
-      caption: { x: 45, y: 84, widthPct: 48, align: "right" },
+      headline: { x: 7, y: 34, widthPct: 45, align: "left" },
+      subtitle: { x: 7, y: 50, widthPct: 42, align: "left" },
+      caption: { x: 7, y: 86, widthPct: 56, align: "left" },
     },
     storyZones: {
-      headline: { x: 43, y: 20, widthPct: 50, align: "right" },
-      subtitle: { x: 45, y: 34, widthPct: 48, align: "right" },
-      caption: { x: 43, y: 74, widthPct: 50, align: "right" },
+      headline: { x: 7, y: 30, widthPct: 48, align: "left" },
+      subtitle: { x: 7, y: 44, widthPct: 45, align: "left" },
+      caption: { x: 7, y: 75, widthPct: 58, align: "left" },
     },
   },
   {
-    id: "food-cafe-bakery-light",
-    name: "Cafetería & Pastelería Luminosa",
-    sourceInsight: "Estética editorial clara sobre mármol, lino o madera clara: tinta oscura de alto contraste sin velos pesados para conservar frescura.",
-    bestFor: "Cafés, pastelería, ensaladas, brunch diurno y mesas luminosas.",
-    idealLighting: "bright",
-    preferredHeadlineCategory: "serif",
+    id: "aljibe-reel-center-hook",
+    name: "Gancho Central · Portada Reel / Carrusel",
+    sourceInsight:
+      "Inspirado en Hay sabores que merecen disfrutarse de cerca y El domingo comienza con una buena elección: frase Sans blanca centrada con sombra suave sobre el plato.",
+    bestFor: "Portadas de Reels, carruseles y tomas cenitales cercanas.",
+    idealLighting: "any",
+    preferredHeadlineCategory: "sans",
     preferredBodyCategory: "sans",
     preferredCaptionCategory: "mono",
-    recommendedScrim: "none",
-    scrimOpacity: 0,
+    recommendedScrim: "radial",
+    scrimOpacity: 0.22,
     headlineUppercase: false,
-    zoneStrategy: "top-center-stacked",
-    accentHint: "#1E1A17",
+    headlineAccentHex: "#FFFFFF",
+    zoneStrategy: "center-reel-hook",
+    accentHint: "#FFFFFF",
     feedZones: {
-      headline: { x: 10, y: 8, widthPct: 80, align: "center" },
-      subtitle: { x: 14, y: 20, widthPct: 72, align: "center" },
-      caption: { x: 14, y: 87, widthPct: 72, align: "center" },
+      headline: { x: 10, y: 42, widthPct: 80, align: "center" },
+      subtitle: { x: 14, y: 55, widthPct: 72, align: "center" },
+      caption: { x: 14, y: 88, widthPct: 72, align: "center" },
     },
     storyZones: {
-      headline: { x: 10, y: 17, widthPct: 80, align: "center" },
-      subtitle: { x: 14, y: 27, widthPct: 72, align: "center" },
-      caption: { x: 14, y: 75, widthPct: 72, align: "center" },
+      headline: { x: 10, y: 43, widthPct: 80, align: "center" },
+      subtitle: { x: 14, y: 55, widthPct: 72, align: "center" },
+      caption: { x: 14, y: 76, widthPct: 72, align: "center" },
     },
   },
   {
-    id: "food-bottom-delivery-hero",
-    name: "Plato Protagonista Arriba + Bloque Delivery Abajo",
-    sourceInsight: "Deja el 60% superior completamente despejado para tomas macro del alimento y concentra título, oferta y pedido en el tercio inferior seguro.",
-    bestFor: "Fotos con detalle jugoso en la mitad superior y superficie libre abajo.",
+    id: "aljibe-bottom-price-bar",
+    name: "Plato Protagonista Arriba + Cierre Precio/Reserva",
+    sourceInsight:
+      "Inspirado en Antes de despedir esta selección / Buffet Dominical: deja lucir el plato arriba y concentra título, oferta Gs. y horario en el tercio inferior.",
+    bestFor: "Promociones con precio destacado, combos y reservas.",
     idealLighting: "any",
     preferredHeadlineCategory: "display",
     preferredBodyCategory: "sans",
     preferredCaptionCategory: "mono",
     recommendedScrim: "bottom",
-    scrimOpacity: 0.42,
+    scrimOpacity: 0.44,
     headlineUppercase: true,
+    headlineAccentHex: "#EAD07E",
     zoneStrategy: "bottom-anchor",
-    accentHint: "#FFFFFF",
+    accentHint: "#EAD07E",
     feedZones: {
       headline: { x: 8, y: 62, widthPct: 84, align: "left" },
       subtitle: { x: 8, y: 74, widthPct: 76, align: "left" },
@@ -191,8 +241,30 @@ export const FOOD_FLYER_PATTERNS: FoodFlyerPattern[] = [
       caption: { x: 8, y: 75, widthPct: 78, align: "left" },
     },
   },
+  {
+    id: "food-cafe-bakery-light",
+    name: "Tarjeta Clara · Tinta Oscura sin Velo",
+    sourceInsight:
+      "Inspirado en el flyer amarillo Reservá: tinta café/grafito oscura (#2D2218) sobre fondos claros o cálidos sin velos oscuros para mantener frescura.",
+    bestFor: "Fondos claros, cremas, amarillos pastel o mesas bien iluminadas.",
+    idealLighting: "bright",
+    preferredHeadlineCategory: "serif",
+    preferredBodyCategory: "sans",
+    preferredCaptionCategory: "mono",
+    recommendedScrim: "none",
+    scrimOpacity: 0,
+    headlineUppercase: false,
+    zoneStrategy: "top-center-stacked",
+    accentHint: "#2D2218",
+    feedZones: {
+      headline: { x: 10, y: 10, widthPct: 80, align: "center" },
+      subtitle: { x: 14, y: 23, widthPct: 72, align: "center" },
+      caption: { x: 12, y: 86, widthPct: 76, align: "center" },
+    },
+    storyZones: {
+      headline: { x: 10, y: 18, widthPct: 80, align: "center" },
+      subtitle: { x: 14, y: 29, widthPct: 72, align: "center" },
+      caption: { x: 12, y: 75, widthPct: 76, align: "center" },
+    },
+  },
 ];
-
-export const FOOD_FLYER_AI_SUMMARY = FOOD_FLYER_PATTERNS.map(
-  (p) => `- ${p.name}: ${p.sourceInsight} (${p.bestFor})`
-).join("\n");
