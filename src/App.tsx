@@ -504,6 +504,13 @@ export default function App() {
         }),
       });
 
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          "El análisis automático por IA requiere el servidor activo. En GitHub Pages estático puedes seguir subiendo imágenes y fuentes, editar textos en tiempo real y exportar en PNG, JPG o PSD."
+        );
+      }
+
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "No se pudo completar el análisis.");
@@ -911,6 +918,17 @@ export default function App() {
           </nav>
         </div>
       </main>
+
+      {/* Developer Credit Footer */}
+      <footer className="shrink-0 h-7 px-4 border-t border-neutral-200 dark:border-neutral-800/90 bg-white dark:bg-[#111419] flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
+        <span>Retícula Studio</span>
+        <span>
+          Desarrollado por{" "}
+          <strong className="font-semibold text-neutral-800 dark:text-neutral-200">
+            Lucio Cabrera
+          </strong>
+        </span>
+      </footer>
 
       {/* High-Resolution Export Modal */}
       <ExportModal

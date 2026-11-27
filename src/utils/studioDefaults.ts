@@ -1,4 +1,7 @@
 import type { FontAsset, StudioDocumentState, TextLayer } from "../types/studio";
+import sampleArchImg from "../assets/images/sample_architecture_editorial_1795775734892.jpg";
+import sampleBotanicalImg from "../assets/images/sample_botanical_stilllife_1795775735335.jpg";
+import sampleNightImg from "../assets/images/sample_urban_night_story_1795775735593.jpg";
 
 export const BUILTIN_FONTS: FontAsset[] = [
   {
@@ -72,21 +75,21 @@ export const SAMPLE_IMAGES: SampleImageItem[] = [
     id: "sample-arch",
     title: "Pabellón Brutalista",
     formatHint: "1080x1350",
-    src: "/src/assets/images/sample_architecture_editorial_1795775734892.jpg",
+    src: sampleArchImg,
     palette: ["#D8B994", "#1B1E22", "#9AB0C1", "#5E5346"],
   },
   {
     id: "sample-botanical",
     title: "Cerámica & Olivo",
     formatHint: "1080x1350",
-    src: "/src/assets/images/sample_botanical_stilllife_1795775735335.jpg",
+    src: sampleBotanicalImg,
     palette: ["#EAE4D7", "#3D3932", "#8A8472", "#C4B9A5"],
   },
   {
     id: "sample-night",
     title: "Café Nocturno",
     formatHint: "1080x1920",
-    src: "/src/assets/images/sample_urban_night_story_1795775735593.jpg",
+    src: sampleNightImg,
     palette: ["#0D1218", "#F4A24E", "#2C2824", "#E6D5BE"],
   },
 ];
