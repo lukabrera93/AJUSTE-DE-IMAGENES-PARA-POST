@@ -12,9 +12,20 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import type { CustomPalette, FontAsset, ImageSettings, ScrimType } from "../types/studio";
+import type {
+  CustomPalette,
+  FontAsset,
+  FontFamilyGroup,
+  ImageSettings,
+  ScrimType,
+} from "../types/studio";
 import { normalizeHexColor } from "../utils/palettes";
-import { SAMPLE_IMAGES } from "../utils/studioDefaults";
+import {
+  FONT_FAMILY_GROUPS,
+  groupFontsByFamily,
+  resolveFontFamilyGroup,
+  SAMPLE_IMAGES,
+} from "../utils/studioDefaults";
 
 interface AssetPanelProps {
   image: ImageSettings;
@@ -24,6 +35,7 @@ interface AssetPanelProps {
   fonts: FontAsset[];
   onUploadFonts: (files: FileList) => Promise<void>;
   onDeleteCustomFont: (id: string) => void;
+  onChangeCustomFontCategory: (id: string, category: FontFamilyGroup) => void;
   onApplyFontToSelected: (family: string) => void;
   fontUploadError: string | null;
   highlightFontsSection?: boolean;
@@ -52,6 +64,7 @@ export function AssetPanel({
   fonts,
   onUploadFonts,
   onDeleteCustomFont,
+  onChangeCustomFontCategory,
   onApplyFontToSelected,
   fontUploadError,
   highlightFontsSection,
@@ -69,12 +82,16 @@ export function AssetPanel({
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [isDraggingFont, setIsDraggingFont] = useState(false);
   const [isDraggingPalette, setIsDraggingPalette] = useState(false);
+  const [fontGroupFilter, setFontGroupFilter] = useState<"all" | FontFamilyGroup>("all");
   const [hexInput, setHexInput] = useState("#D4A359");
   const [brokenSamples, setBrokenSamples] = useState<Record<string, boolean>>({});
 
   const isLocked = Boolean(image.locked);
   const customFonts = fonts.filter((f) => f.isCustom);
   const builtinFonts = fonts.filter((f) => !f.isCustom);
+  const groupedFonts = groupFontsByFamily(fonts).filter(
+    (entry) => fontGroupFilter === "all" || entry.group.id === fontGroupFilter
+  );
 
   const handleImageFile = (file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -519,49 +536,107 @@ export function AssetPanel({
           </p>
         )}
 
-        {/* Uploaded custom fonts list */}
-        <div className="space-y-1.5">
-          {customFonts.length === 0 ? (
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 py-1 leading-relaxed">
-              Sube tus fuentes de marca. Al analizar la imagen, la plataforma las usará de forma prioritaria.
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {customFonts.map((font) => (
-                <div
-                  key={font.id}
-                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#161A22]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => onApplyFontToSelected(font.family)}
-                    className="min-w-0 flex-1 text-left cursor-pointer group"
-                    title="Aplicar fuente al texto seleccionado"
+        {/* Family Group Filter */}
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-neutral-100 dark:bg-[#161A22] overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setFontGroupFilter("all")}
+            className={`px-2 py-1 text-[10px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              fontGroupFilter === "all"
+                ? "bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-sm"
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200"
+            }`}
+          >
+            Todas
+          </button>
+          {FONT_FAMILY_GROUPS.map((grp) => (
+            <button
+              key={grp.id}
+              type="button"
+              onClick={() => setFontGroupFilter(grp.id)}
+              className={`px-2 py-1 text-[10px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                fontGroupFilter === grp.id
+                  ? "bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-sm"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200"
+              }`}
+            >
+              {grp.shortLabel}
+            </button>
+          ))}
+        </div>
+
+        {/* Fonts Grouped by Family Type */}
+        <div className="space-y-3">
+          {groupedFonts.map(({ group, fonts: familyFonts }) => (
+            <div key={group.id} className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2 pt-1">
+                <span className="text-[11px] font-semibold text-neutral-800 dark:text-neutral-200">
+                  {group.label}
+                </span>
+                <span className="text-[10px] text-neutral-500 dark:text-neutral-400 tabular-nums shrink-0">
+                  {familyFonts.length}
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                {familyFonts.map((font) => (
+                  <div
+                    key={font.id}
+                    className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#161A22]"
                   >
-                    <div
-                      className="text-sm text-neutral-900 dark:text-neutral-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
-                      style={{ fontFamily: font.family }}
+                    <button
+                      type="button"
+                      onClick={() => onApplyFontToSelected(font.family)}
+                      className="min-w-0 flex-1 text-left cursor-pointer group py-0.5"
+                      title="Aplicar fuente al texto seleccionado"
                     >
-                      {font.name}
-                    </div>
-                    <div className="text-[11px] text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
-                      <span>{font.formatLabel || "FONT"}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>Subida · Clic para aplicar</span>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteCustomFont(font.id)}
-                    className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md text-neutral-400 hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                    aria-label={`Eliminar fuente ${font.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+                      <div
+                        className="text-sm text-neutral-900 dark:text-neutral-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
+                        style={{ fontFamily: font.family }}
+                      >
+                        {font.name}
+                      </div>
+                      <div className="text-[10px] text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                        <span>{font.isCustom ? `Subida · ${font.formatLabel || "FONT"}` : "Estudio"}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>Clic para aplicar</span>
+                      </div>
+                    </button>
+
+                    {font.isCustom && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <select
+                          value={resolveFontFamilyGroup(font)}
+                          onChange={(e) =>
+                            onChangeCustomFontCategory(
+                              font.id,
+                              e.target.value as FontFamilyGroup
+                            )
+                          }
+                          aria-label={`Tipo de familia para ${font.name}`}
+                          className="rounded border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-[#111419] px-1 py-1 text-[10px] text-neutral-700 dark:text-neutral-300 cursor-pointer"
+                        >
+                          {FONT_FAMILY_GROUPS.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.shortLabel}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteCustomFont(font.id)}
+                          className="min-h-[30px] min-w-[30px] flex items-center justify-center rounded-md text-neutral-400 hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                          aria-label={`Eliminar fuente ${font.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
+          ))}
         </div>
       </section>
 

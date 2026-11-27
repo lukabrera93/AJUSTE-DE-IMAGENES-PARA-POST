@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -10,6 +11,8 @@ import {
   Play,
   Plus,
   Redo2,
+  RefreshCw,
+  Server,
   Sparkles,
   Trash2,
   Undo2,
@@ -25,6 +28,7 @@ import type {
   TextRole,
   VersionSnapshot,
 } from "../types/studio";
+import { groupFontsByFamily } from "../utils/studioDefaults";
 
 export type InspectorTab = "ai" | "text" | "controls";
 
@@ -37,6 +41,10 @@ interface InspectorPanelProps {
   isAnalyzing: boolean;
   analysisError: string | null;
   analysisResult: AnalysisResult | null;
+  aiServerStatus: "checking" | "ready" | "missing_key" | "offline";
+  aiEndpointBase: string;
+  onChangeAiEndpointBase: (url: string) => void;
+  onRefreshAiStatus: () => void;
   activePreviewId?: string;
   onExecuteRecommendation: (rec: AestheticRecommendation) => void;
   onPreviewProposal: (proposal: LayoutProposal) => void;
@@ -85,6 +93,10 @@ export function InspectorPanel({
   isAnalyzing,
   analysisError,
   analysisResult,
+  aiServerStatus,
+  aiEndpointBase,
+  onChangeAiEndpointBase,
+  onRefreshAiStatus,
   activePreviewId,
   onExecuteRecommendation,
   onPreviewProposal,
@@ -108,9 +120,10 @@ export function InspectorPanel({
   onPreviewVersion,
   onJumpToHistoryIndex,
 }: InspectorPanelProps) {
+  const [showAiOptions, setShowAiOptions] = useState(false);
   const selectedLayer = layers.find((l) => l.id === selectedLayerId) || layers[0] || null;
   const customFonts = fonts.filter((f) => f.isCustom);
-  const builtinFonts = fonts.filter((f) => !f.isCustom);
+  const groupedFontFamilies = groupFontsByFamily(fonts);
   const palette = analysisResult?.paletteColors ?? [
     "#FFFFFF",
     "#141619",
@@ -177,15 +190,15 @@ export function InspectorPanel({
       <div className="flex-1 overflow-y-auto p-3.5 space-y-5">
         {activeTab === "ai" && (
           <div className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                Detecta espacios vacíos, contraste y sujeto principal al instante sin IA usando{" "}
+                Usa la base gastronómica de flyers (patrones F/Z, zonas seguras y espacios negativos) sin IA con{" "}
                 {customFonts.length > 0
                   ? `tus ${customFonts.length} fuentes subidas.`
-                  : "tipografías editoriales."}
+                  : "tipografías agrupadas por familia."}
               </p>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <button
                   type="button"
                   disabled={isAnalyzing}
@@ -196,19 +209,90 @@ export function InspectorPanel({
                   <span>Analizar y recomendar (Sin IA)</span>
                 </button>
 
-                <button
-                  type="button"
-                  disabled={isAnalyzing}
-                  onClick={onAnalyzeImage}
-                  className="w-full py-2 px-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#161A22] hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-60 text-neutral-700 dark:text-neutral-200 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[36px]"
-                >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  <span>
-                    {isAnalyzing
-                      ? "Consultando IA..."
-                      : "Análisis con IA (requiere servidor)"}
-                  </span>
-                </button>
+                <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-[#161A22] p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAiOptions((v) => !v)}
+                      className="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-800 dark:text-neutral-200 cursor-pointer"
+                    >
+                      <Server className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span>IA opcional vía API servidor</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAiOptions((v) => !v)}
+                      className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      {showAiOptions ? "Ocultar" : "Configurar"}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                    <span
+                      className={
+                        aiServerStatus === "ready"
+                          ? "text-emerald-600 dark:text-emerald-400 font-medium"
+                          : aiServerStatus === "missing_key"
+                          ? "text-amber-600 dark:text-amber-400 font-medium"
+                          : aiServerStatus === "checking"
+                          ? "text-neutral-500 dark:text-neutral-400"
+                          : "text-neutral-500 dark:text-neutral-400"
+                      }
+                    >
+                      {aiServerStatus === "ready"
+                        ? "API conectada y lista para analizar"
+                        : aiServerStatus === "missing_key"
+                        ? "Servidor activo · falta GEMINI_API_KEY en el servidor"
+                        : aiServerStatus === "checking"
+                        ? "Comprobando conexión API..."
+                        : "Sin servidor API conectado (modo local activo)"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={onRefreshAiStatus}
+                      className="inline-flex items-center gap-1 text-neutral-600 dark:text-neutral-300 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer shrink-0"
+                      title="Comprobar estado del servidor API"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Comprobar</span>
+                    </button>
+                  </div>
+
+                  {showAiOptions && (
+                    <div className="pt-1.5 border-t border-neutral-200 dark:border-neutral-800 space-y-2">
+                      <label className="block space-y-1">
+                        <span className="text-[10px] font-medium text-neutral-600 dark:text-neutral-400">
+                          URL de servidor proxy API (opcional para GitHub Pages)
+                        </span>
+                        <input
+                          type="url"
+                          value={aiEndpointBase}
+                          onChange={(e) => onChangeAiEndpointBase(e.target.value)}
+                          placeholder="Vacío = mismo servidor (/api)"
+                          className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#111419] px-2.5 py-1.5 text-[11px] text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        />
+                      </label>
+                      <p className="text-[10px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                        Por seguridad, la clave <span className="font-mono">GEMINI_API_KEY</span> se configura en el servidor (<span className="font-mono">Settings &gt; Secrets</span> o <span className="font-mono">.env</span>) y nunca en el navegador.
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={isAnalyzing}
+                    onClick={onAnalyzeImage}
+                    className="w-full py-2 px-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#111419] hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-60 text-neutral-800 dark:text-neutral-100 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[36px]"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                    <span>
+                      {isAnalyzing
+                        ? "Consultando IA..."
+                        : "Analizar con IA (API servidor)"}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -301,8 +385,15 @@ export function InspectorPanel({
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <div className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
-                              {rec.title}
+                            <div className="min-w-0">
+                              {rec.patternSource && (
+                                <div className="text-[10px] font-medium text-blue-600 dark:text-blue-400 truncate mb-0.5">
+                                  {rec.patternSource}
+                                </div>
+                              )}
+                              <div className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
+                                {rec.title}
+                              </div>
                             </div>
                             <span className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400 shrink-0">
                               {catLabel}
@@ -349,6 +440,11 @@ export function InspectorPanel({
                         }`}
                       >
                         <div>
+                          {prop.patternSource && (
+                            <div className="text-[10px] font-medium text-blue-600 dark:text-blue-400 truncate mb-0.5">
+                              {prop.patternSource}
+                            </div>
+                          )}
                           <div className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
                             0{index + 1}. {prop.title}
                           </div>
@@ -485,22 +581,17 @@ export function InspectorPanel({
                     }
                     className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#161A22] px-2.5 py-2 text-xs text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
                   >
-                    {customFonts.length > 0 && (
-                      <optgroup label="Tus fuentes subidas">
-                        {customFonts.map((f) => (
+                    {groupedFontFamilies.map((entry) => (
+                      <optgroup key={entry.group.id} label={entry.group.label}>
+                        {entry.fonts.map((f) => (
                           <option key={f.id} value={f.family}>
-                            {f.name} ({f.formatLabel})
+                            {f.isCustom
+                              ? `${f.name} [Subida${f.formatLabel ? ` · ${f.formatLabel}` : ""}]`
+                              : f.name}
                           </option>
                         ))}
                       </optgroup>
-                    )}
-                    <optgroup label="Fuentes del estudio">
-                      {builtinFonts.map((f) => (
-                        <option key={f.id} value={f.family}>
-                          {f.name}
-                        </option>
-                      ))}
-                    </optgroup>
+                    ))}
                   </select>
                 </label>
 

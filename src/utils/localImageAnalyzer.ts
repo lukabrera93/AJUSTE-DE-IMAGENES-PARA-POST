@@ -9,6 +9,11 @@ import type {
   ScrimType,
   TextLayer,
 } from "../types/studio";
+import {
+  FOOD_FLYER_PATTERNS,
+  type FoodFlyerPattern,
+} from "../data/foodFlyerLayouts";
+import { resolveFontFamilyGroup } from "./studioDefaults";
 
 interface ZoneStats {
   x: number; // %
@@ -51,7 +56,6 @@ function extractPalette(pixels: Uint8ClampedArray): string[] {
     const r = pixels[i];
     const g = pixels[i + 1];
     const b = pixels[i + 2];
-    // Quantize into 24-step buckets
     const qr = Math.round(r / 28) * 28;
     const qg = Math.round(g / 28) * 28;
     const qb = Math.round(b / 28) * 28;
@@ -123,7 +127,6 @@ function measureRegion(
   const avgLum = count > 0 ? sumLum / count : 128;
   const energy = count > 0 ? sumGrad / count : 20;
 
-  // Compute variance of luminance inside the zone (uniformity = cleaner typography backdrop)
   let variance = 0;
   for (let y = y0; y < y1; y++) {
     for (let x = x0; x < x1; x++) {
@@ -133,123 +136,117 @@ function measureRegion(
   }
   const stdDev = count > 0 ? Math.sqrt(variance / count) : 20;
 
-  // Lower energy + lower stdDev = higher aesthetic cleanliness score
   const score = 100 - energy * 1.4 - stdDev * 0.7;
 
   return { x: xPct, y: yPct, w: wPct, h: hPct, avgLum, energy, score };
 }
 
-function pickFontsForHierarchy(fonts: FontAsset[]) {
-  const custom = fonts.filter((f) => f.isCustom);
-  const displayOrSerif = fonts.filter(
-    (f) => f.category === "serif" || f.category === "display"
+function pickFontByCategory(
+  fonts: FontAsset[],
+  preferred: "display" | "serif" | "sans" | "mono",
+  fallbackName: string
+): { name: string; isCustom: boolean } {
+  const customExact = fonts.find(
+    (f) => f.isCustom && resolveFontFamilyGroup(f) === preferred
   );
-  const sansOrMono = fonts.filter(
-    (f) => f.category === "sans" || f.category === "mono"
-  );
+  if (customExact) return { name: customExact.name, isCustom: true };
 
-  const primary =
-    custom[0]?.name || displayOrSerif[0]?.name || fonts[0]?.name || "Playfair Display";
-  const secondary =
-    custom[1]?.name ||
-    sansOrMono[0]?.name ||
-    fonts[1]?.name ||
-    "Plus Jakarta Sans";
-  const caption =
-    custom[2]?.name ||
-    fonts.find((f) => f.category === "mono")?.name ||
-    secondary;
-
-  return { primary, secondary, caption, hasCustom: custom.length > 0 };
-}
-
-function estimateLines(text: string, fontSizePx: number, widthPct: number): number {
-  const boxWidthPx = (widthPct / 100) * 1080;
-  const avgCharPx = fontSizePx * 0.54;
-  const charsPerLine = Math.max(8, Math.floor(boxWidthPx / avgCharPx));
-  const paragraphs = (text || "Texto").split("\n");
-  let lines = 0;
-  for (const p of paragraphs) {
-    lines += Math.max(1, Math.ceil(p.length / charsPerLine));
+  const customAny = fonts.find((f) => f.isCustom);
+  if (customAny && preferred === "display") {
+    return { name: customAny.name, isCustom: true };
   }
-  return Math.min(6, lines);
+
+  const builtinMatch = fonts.find((f) => resolveFontFamilyGroup(f) === preferred);
+  if (builtinMatch) return { name: builtinMatch.name, isCustom: builtinMatch.isCustom };
+
+  return { name: fonts[0]?.name || fallbackName, isCustom: Boolean(fonts[0]?.isCustom) };
 }
 
-function buildStackPlacements(
+function buildPatternPlacements(
+  pattern: FoodFlyerPattern,
   layers: TextLayer[],
   format: CanvasFormat,
-  region: ZoneStats,
-  textAlign: "left" | "center" | "right",
-  fontSet: { primary: string; secondary: string; caption: string },
-  forceDarkInk?: boolean,
-  spacingScale = 1
-): { placements: AIPlacement[]; color: string; scrim: ScrimType; scrimOpacity: number } {
-  const canvasH = format === "1080x1920" ? 1920 : 1350;
-  const isDarkBg = forceDarkInk === undefined ? region.avgLum < 138 : !forceDarkInk;
-  const textColor = isDarkBg ? "#F8F7F4" : "#14161A";
-  const subtleColor = isDarkBg ? "#E6E3DC" : "#2D3138";
-  const shadowStrength = isDarkBg ? (region.energy > 14 ? 0.45 : 0.25) : 0;
+  fonts: FontAsset[],
+  zoneLum: number,
+  zoneEnergy: number,
+  scaleFactor = 1,
+  forceDarkInk?: boolean
+): {
+  placements: AIPlacement[];
+  scrim: ScrimType;
+  scrimOpacity: number;
+  primaryFontName: string;
+  usedCustomFont: boolean;
+} {
+  const zones = format === "1080x1920" ? pattern.storyZones : pattern.feedZones;
+  const isDarkSurface = forceDarkInk === undefined ? zoneLum < 142 : !forceDarkInk;
+  const textColor = isDarkSurface ? "#F8F7F4" : "#181512";
+  const subtitleColor = isDarkSurface ? "#ECE7DE" : "#2F2A24";
 
-  let scrim: ScrimType = "none";
-  let scrimOpacity = 0;
-  if (isDarkBg && region.energy > 12) {
-    scrim = region.y < 40 ? "top" : "bottom";
-    scrimOpacity = Math.min(0.42, 0.18 + region.energy * 0.008);
+  const headlineFont = pickFontByCategory(fonts, pattern.preferredHeadlineCategory, "Oswald");
+  const bodyFont = pickFontByCategory(fonts, pattern.preferredBodyCategory, "Montserrat");
+  const captionFont = pickFontByCategory(fonts, pattern.preferredCaptionCategory, "JetBrains Mono");
+
+  let scrim: ScrimType = pattern.recommendedScrim;
+  let scrimOpacity = pattern.scrimOpacity;
+  if (!isDarkSurface && forceDarkInk) {
+    scrim = "none";
+    scrimOpacity = 0;
+  } else if (isDarkSurface && scrim === "none" && zoneEnergy > 14) {
+    scrim = zones.headline.y > 50 ? "bottom" : "top";
+    scrimOpacity = Math.min(0.38, 0.16 + zoneEnergy * 0.008);
   }
 
-  let cursorY = region.y;
-  const maxAllowedY = format === "1080x1920" ? 78 : 88;
-  const placements: AIPlacement[] = [];
+  const shadowStrength = isDarkSurface ? (zoneEnergy > 14 ? 0.48 : 0.28) : 0;
 
-  for (let i = 0; i < layers.length; i++) {
-    const layer = layers[i];
-    const isHeadline = layer.role === "headline" || i === 0;
-    const isCaption = layer.role === "caption";
-
-    const fontFamily = isHeadline
-      ? fontSet.primary
+  const placements: AIPlacement[] = layers.map((layer, idx) => {
+    const isHeadline = layer.role === "headline" || idx === 0;
+    const isCaption = layer.role === "caption" || idx >= 2;
+    const targetZone = isHeadline
+      ? zones.headline
       : isCaption
-      ? fontSet.caption
-      : fontSet.secondary;
+      ? zones.caption
+      : zones.subtitle;
 
-    const fontSize = isHeadline
-      ? Math.round(74 * spacingScale)
+    const chosenFont = isHeadline
+      ? headlineFont.name
       : isCaption
-      ? Math.round(21 * spacingScale)
-      : Math.round(31 * spacingScale);
+      ? captionFont.name
+      : bodyFont.name;
 
-    const lineHeight = isHeadline ? 1.02 : isCaption ? 1.2 : 1.35;
-    const letterSpacing = isHeadline ? -0.02 : isCaption ? 0.14 : 0.01;
-    const fontWeight = isHeadline ? 600 : 500;
+    const baseSize = isHeadline ? 82 : isCaption ? 22 : 31;
+    const fontSize = Math.max(18, Math.round(baseSize * scaleFactor));
+    const letterSpacing = isHeadline
+      ? pattern.preferredHeadlineCategory === "display"
+        ? 0.01
+        : -0.02
+      : isCaption
+      ? 0.14
+      : 0.01;
 
-    // If caption is last layer and region is at the top, keep caption cleanly stacked or pinned at bottom safe zone
-    let layerY = cursorY;
-    if (isCaption && region.y < 35 && layers.length >= 3) {
-      layerY = format === "1080x1920" ? 76 : 86;
-    } else {
-      layerY = Math.min(maxAllowedY, cursorY);
-      const lines = estimateLines(layer.text, fontSize, region.w);
-      const blockHeightPct = ((lines * fontSize * lineHeight) / canvasH) * 100;
-      cursorY = layerY + blockHeightPct + 2.4 * spacingScale;
-    }
-
-    placements.push({
+    return {
       layerId: layer.id,
-      x: Number(region.x.toFixed(1)),
-      y: Number(layerY.toFixed(1)),
-      widthPct: Number(region.w.toFixed(1)),
-      fontFamily,
+      x: targetZone.x,
+      y: targetZone.y + (idx > 2 ? (idx - 2) * 8 : 0),
+      widthPct: targetZone.widthPct,
+      fontFamily: chosenFont,
       fontSize,
-      fontWeight,
+      fontWeight: isHeadline ? 700 : 500,
       letterSpacing,
-      lineHeight,
-      textAlign,
-      color: isHeadline ? textColor : subtleColor,
+      lineHeight: isHeadline ? 0.98 : isCaption ? 1.2 : 1.32,
+      textAlign: targetZone.align,
+      color: isHeadline ? textColor : subtitleColor,
       shadowStrength,
-    });
-  }
+    };
+  });
 
-  return { placements, color: textColor, scrim, scrimOpacity };
+  return {
+    placements,
+    scrim,
+    scrimOpacity,
+    primaryFontName: headlineFont.name,
+    usedCustomFont: headlineFont.isCustom || bodyFont.isCustom,
+  };
 }
 
 export async function analyzeImageLocally(
@@ -280,7 +277,6 @@ export async function analyzeImageLocally(
   ctx.fillStyle = image.canvasBgColor || "#0F1115";
   ctx.fillRect(0, 0, gridW, gridH);
 
-  // Render exact framing matching the user's crop/zoom/pan/rotation
   const imgRatio = img.naturalWidth / img.naturalHeight;
   const canvasRatio = gridW / gridH;
   let drawW = gridW;
@@ -309,12 +305,15 @@ export async function analyzeImageLocally(
 
   const imgData = ctx.getImageData(0, 0, gridW, gridH).data;
   const lum = new Float32Array(gridW * gridH);
+  let lumTotal = 0;
   for (let i = 0; i < gridW * gridH; i++) {
     const p = i * 4;
-    lum[i] = 0.299 * imgData[p] + 0.587 * imgData[p + 1] + 0.114 * imgData[p + 2];
+    const v = 0.299 * imgData[p] + 0.587 * imgData[p + 1] + 0.114 * imgData[p + 2];
+    lum[i] = v;
+    lumTotal += v;
   }
+  const overallLum = lumTotal / (gridW * gridH);
 
-  // Compute local gradient magnitude (visual detail / clutter)
   const grad = new Float32Array(gridW * gridH);
   for (let y = 1; y < gridH - 1; y++) {
     for (let x = 1; x < gridW - 1; x++) {
@@ -325,7 +324,6 @@ export async function analyzeImageLocally(
     }
   }
 
-  // Detect main focal subject region (highest visual detail density)
   let bestSubject = { x: 25, y: 30, width: 50, height: 40, energy: -1 };
   for (let sy = 15; sy <= 60; sy += 10) {
     for (let sx = 10; sx <= 55; sx += 10) {
@@ -337,150 +335,176 @@ export async function analyzeImageLocally(
   }
 
   const paletteColors = extractPalette(imgData);
-  const fontSet = pickFontsForHierarchy(fonts);
 
   const topSafeY = format === "1080x1920" ? 16 : 8;
   const bottomSafeY = format === "1080x1920" ? 56 : 62;
 
-  const candidates: { id: string; label: string; region: ZoneStats; align: "left" | "center" | "right" }[] = [
-    {
-      id: "top-left",
-      label: "Espacio negativo superior",
-      region: measureRegion(lum, grad, gridW, gridH, 8, topSafeY, 78, 28),
-      align: "left",
-    },
-    {
-      id: "top-center",
-      label: "Encabezado centrado limpio",
-      region: measureRegion(lum, grad, gridW, gridH, 11, topSafeY, 78, 28),
-      align: "center",
-    },
-    {
-      id: "side-left",
-      label: "Columna editorial izquierda",
-      region: measureRegion(lum, grad, gridW, gridH, 8, 26, 46, 42),
-      align: "left",
-    },
-    {
-      id: "side-right",
-      label: "Columna asimétrica derecha",
-      region: measureRegion(lum, grad, gridW, gridH, 46, 26, 46, 42),
-      align: "right",
-    },
-    {
-      id: "bottom-left",
-      label: "Bloque inferior equilibrado",
-      region: measureRegion(lum, grad, gridW, gridH, 8, bottomSafeY, 78, 24),
-      align: "left",
-    },
-  ];
+  const zoneTop = measureRegion(lum, grad, gridW, gridH, 8, topSafeY, 82, 26);
+  const zoneBottom = measureRegion(lum, grad, gridW, gridH, 8, bottomSafeY, 82, 24);
+  const zoneLeft = measureRegion(lum, grad, gridW, gridH, 7, 16, 46, 56);
+  const zoneRight = measureRegion(lum, grad, gridW, gridH, 47, 16, 46, 56);
 
-  // Rank candidate zones by visual calmness (highest score = cleanest negative space)
-  const ranked = [...candidates].sort((a, b) => b.region.score - a.region.score);
-  const best = ranked[0];
-  const second = ranked.find((c) => c.id !== best.id && Math.abs(c.region.y - best.region.y) > 14) || ranked[1];
-  const third = ranked.find((c) => c.id !== best.id && c.id !== second.id) || ranked[2];
+  // Score every food-flyer pattern from our social-media database against this photo
+  const scoredPatterns = FOOD_FLYER_PATTERNS.map((pattern) => {
+    let zone: ZoneStats = zoneTop;
+    if (pattern.zoneStrategy === "left-flatlay") zone = zoneLeft;
+    else if (pattern.zoneStrategy === "right-flatlay") zone = zoneRight;
+    else if (pattern.zoneStrategy === "bottom-anchor") zone = zoneBottom;
+    else if (pattern.zoneStrategy === "top-hook-bottom-cta") {
+      zone = {
+        ...zoneTop,
+        score: (zoneTop.score * 0.6 + zoneBottom.score * 0.4),
+      };
+    }
 
-  // Build 3 executable clean-aesthetic recommendations
-  const stackBest = buildStackPlacements(layers, format, best.region, best.align, fontSet);
-  const stackAiry = buildStackPlacements(
+    let lightingBonus = 0;
+    if (pattern.idealLighting === "dark" && overallLum < 115) lightingBonus = 14;
+    if (pattern.idealLighting === "bright" && overallLum >= 135) lightingBonus = 14;
+    if (pattern.idealLighting === "dark" && overallLum >= 145) lightingBonus = -12;
+    if (pattern.idealLighting === "bright" && overallLum < 105) lightingBonus = -12;
+
+    return {
+      pattern,
+      zone,
+      totalScore: zone.score + lightingBonus,
+    };
+  }).sort((a, b) => b.totalScore - a.totalScore);
+
+  const topMatch = scoredPatterns[0];
+  const secondMatch =
+    scoredPatterns.find((m) => m.pattern.zoneStrategy !== topMatch.pattern.zoneStrategy) ||
+    scoredPatterns[1];
+  const thirdMatch =
+    scoredPatterns.find(
+      (m) =>
+        m.pattern.id !== topMatch.pattern.id &&
+        m.pattern.id !== secondMatch.pattern.id
+    ) || scoredPatterns[2];
+
+  const topBuild = buildPatternPlacements(
+    topMatch.pattern,
     layers,
     format,
-    { ...best.region, w: Math.min(72, best.region.w) },
-    best.align,
-    fontSet,
-    undefined,
-    0.92
-  );
-  const stackContrast = buildStackPlacements(
-    layers,
-    format,
-    second.region,
-    second.align,
-    fontSet,
-    second.region.avgLum > 140
+    fonts,
+    topMatch.zone.avgLum,
+    topMatch.zone.energy
   );
 
-  const fontNote = fontSet.hasCustom
-    ? `usando tu fuente "${fontSet.primary}"`
-    : `con "${fontSet.primary}"`;
+  const airyBuild = buildPatternPlacements(
+    secondMatch.pattern,
+    layers,
+    format,
+    fonts,
+    secondMatch.zone.avgLum,
+    secondMatch.zone.energy,
+    0.9
+  );
+
+  const contrastBuild = buildPatternPlacements(
+    thirdMatch.pattern,
+    layers,
+    format,
+    fonts,
+    thirdMatch.zone.avgLum,
+    thirdMatch.zone.energy,
+    1,
+    thirdMatch.zone.avgLum >= 142
+  );
+
+  const fontLabel = topBuild.usedCustomFont
+    ? `priorizando tu fuente "${topBuild.primaryFontName}"`
+    : `con "${topBuild.primaryFontName}"`;
 
   const recommendations: AestheticRecommendation[] = [
     {
       id: "local-rec-1",
-      title: `Aprovechar ${best.label.toLowerCase()}`,
-      description: `Zona de menor ruido visual detectada en tu foto. Ubica el bloque ${fontNote} con contraste automático.`,
+      title: topMatch.pattern.name,
+      description: `${topMatch.pattern.sourceInsight} Aplicado ${fontLabel}.`,
       category: "ubicacion",
-      recommendedScrim: stackBest.scrim,
-      scrimOpacity: stackBest.scrimOpacity,
-      placements: stackBest.placements,
+      patternSource: `Base gastronomía · ${topMatch.pattern.bestFor}`,
+      recommendedScrim: topBuild.scrim,
+      scrimOpacity: topBuild.scrimOpacity,
+      placements: topBuild.placements,
     },
     {
       id: "local-rec-2",
-      title: "Respiración editorial limpia",
-      description: "Reduce ancho de caja y escala un 8% para dejar más aire alrededor del sujeto principal.",
+      title: `Respiro visual · ${secondMatch.pattern.name}`,
+      description: `Reduce la escala un 10% y aprovecha la zona más limpia sin cubrir el foco del plato.`,
       category: "respiracion",
-      recommendedScrim: stackAiry.scrim,
-      scrimOpacity: stackAiry.scrimOpacity,
-      placements: stackAiry.placements,
+      patternSource: `Base gastronomía · ${secondMatch.pattern.bestFor}`,
+      recommendedScrim: airyBuild.scrim,
+      scrimOpacity: airyBuild.scrimOpacity,
+      placements: airyBuild.placements,
     },
     {
       id: "local-rec-3",
-      title: second.region.avgLum >= 140 ? "Tinta oscura sobre zona clara" : "Lectura luminosa con velo sutil",
+      title:
+        thirdMatch.zone.avgLum >= 142
+          ? "Tinta oscura editorial sobre foto clara"
+          : "Alto contraste gastronómico con velo",
       description:
-        second.region.avgLum >= 140
-          ? "Usa tipografía oscura de alto contraste sobre el área luminosa sin oscurecer la imagen."
-          : "Aplica degradado protector suave y texto marfil para despegar las letras del fondo.",
+        thirdMatch.zone.avgLum >= 142
+          ? "Conserva la frescura de la luz natural usando tipografía oscura sin oscurecer el plato."
+          : "Degradado direccional sutil para despegar precios, título y CTA en pantallas móviles.",
       category: "contraste",
-      recommendedScrim: second.region.avgLum >= 140 ? "none" : second.region.y < 40 ? "top" : "bottom",
-      scrimOpacity: second.region.avgLum >= 140 ? 0 : 0.34,
-      placements: stackContrast.placements,
+      patternSource: `Base gastronomía · ${thirdMatch.pattern.name}`,
+      recommendedScrim: contrastBuild.scrim,
+      scrimOpacity: contrastBuild.scrimOpacity,
+      placements: contrastBuild.placements,
     },
   ];
 
   if (customColors.length > 0) {
     const sortedByContrast = [...customColors].sort(
       (a, b) =>
-        Math.abs(hexLuminance(b) - best.region.avgLum) -
-        Math.abs(hexLuminance(a) - best.region.avgLum)
+        Math.abs(hexLuminance(b) - topMatch.zone.avgLum) -
+        Math.abs(hexLuminance(a) - topMatch.zone.avgLum)
     );
     const headlineColor = sortedByContrast[0];
     const secondaryColor = sortedByContrast[1] || headlineColor;
-    const palettePlacements = stackBest.placements.map((p, idx) => ({
+    const palettePlacements = topBuild.placements.map((p, idx) => ({
       ...p,
       color: idx === 0 ? headlineColor : secondaryColor,
     }));
     recommendations.unshift({
       id: "local-rec-palette",
-      title: "Aplicar tu paleta de colores subida",
-      description: `Combina los tonos de tu paleta (${headlineColor}${secondaryColor !== headlineColor ? ` y ${secondaryColor}` : ""}) con mayor contraste sobre esta imagen.`,
+      title: "Tu paleta de colores + Flyer Gastronómico",
+      description: `Combina tus tonos (${headlineColor}${secondaryColor !== headlineColor ? ` y ${secondaryColor}` : ""}) sobre la mejor zona libre de la foto.`,
       category: "contraste",
-      recommendedScrim: stackBest.scrim,
-      scrimOpacity: stackBest.scrimOpacity,
+      patternSource: `Paleta subida · ${topMatch.pattern.name}`,
+      recommendedScrim: topBuild.scrim,
+      scrimOpacity: topBuild.scrimOpacity,
       placements: palettePlacements,
     });
   }
 
-  // Build 2 complete strategic layout proposals
-  const prop1 = buildStackPlacements(layers, format, best.region, best.align, fontSet);
-  const prop2 = buildStackPlacements(layers, format, third.region, third.align, fontSet);
+  const prop2Build = buildPatternPlacements(
+    secondMatch.pattern,
+    layers,
+    format,
+    fonts,
+    secondMatch.zone.avgLum,
+    secondMatch.zone.energy
+  );
 
   const proposals: LayoutProposal[] = [
     {
       id: "local-prop-1",
-      title: best.label,
-      rationale: `Calculado localmente por menor densidad de bordes en esta área (${Math.round(best.region.avgLum)} lum) ${fontNote}.`,
-      recommendedScrim: prop1.scrim,
-      scrimOpacity: prop1.scrimOpacity,
-      placements: prop1.placements,
+      title: topMatch.pattern.name,
+      rationale: `${topMatch.pattern.bestFor} Detectada menor carga visual en esta zona (${Math.round(topMatch.zone.avgLum)} lum).`,
+      patternSource: topMatch.pattern.name,
+      recommendedScrim: topBuild.scrim,
+      scrimOpacity: topBuild.scrimOpacity,
+      placements: topBuild.placements,
     },
     {
       id: "local-prop-2",
-      title: third.label,
-      rationale: "Alternativa equilibrada fuera de la zona central de mayor detalle fotográfico.",
-      recommendedScrim: prop2.scrim,
-      scrimOpacity: prop2.scrimOpacity,
-      placements: prop2.placements,
+      title: secondMatch.pattern.name,
+      rationale: `${secondMatch.pattern.sourceInsight}`,
+      patternSource: secondMatch.pattern.name,
+      recommendedScrim: prop2Build.scrim,
+      scrimOpacity: prop2Build.scrimOpacity,
+      placements: prop2Build.placements,
     },
   ];
 
@@ -491,7 +515,7 @@ export async function analyzeImageLocally(
       y: bestSubject.y,
       width: bestSubject.width,
       height: bestSubject.height,
-      label: "Área de mayor detalle",
+      label: "Foco principal",
     },
     recommendations,
     proposals,

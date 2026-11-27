@@ -12,6 +12,7 @@ import type {
   CanvasFormat,
   CustomPalette,
   FontAsset,
+  FontFamilyGroup,
   ImageSettings,
   LayoutProposal,
   PreviewSession,
@@ -24,6 +25,7 @@ import type {
 import {
   deleteSavedCustomFont,
   loadSavedCustomFonts,
+  updateSavedCustomFontCategory,
   uploadCustomFontFile,
 } from "./utils/fonts";
 import {
@@ -36,6 +38,7 @@ import {
   INITIAL_STUDIO_STATE,
   imageSrcToOptimizedBase64,
 } from "./utils/studioDefaults";
+import { FOOD_FLYER_AI_SUMMARY } from "./data/foodFlyerLayouts";
 import { analyzeImageLocally } from "./utils/localImageAnalyzer";
 
 type SidePanelMode = "none" | "assets" | "ai" | "text" | "controls";
@@ -135,10 +138,67 @@ export default function App() {
   const [mobileSidePanel, setMobileSidePanel] = useState<SidePanelMode>("none");
   const [isExportOpen, setIsExportOpen] = useState(false);
 
-  // AI Analysis state
+  // AI Analysis & optional API server connection state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [aiEndpointBase, setAiEndpointBase] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem("reticula_ai_endpoint_base") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [aiServerStatus, setAiServerStatus] = useState<
+    "checking" | "ready" | "missing_key" | "offline"
+  >("checking");
+
+  const normalizeAiBase = useCallback(
+    (raw: string) => raw.trim().replace(/\/+$/, ""),
+    []
+  );
+
+  const refreshAiStatus = useCallback(
+    async (baseOverride?: string) => {
+      const base = normalizeAiBase(baseOverride ?? aiEndpointBase);
+      setAiServerStatus("checking");
+      try {
+        const res = await fetch(`${base}/api/health`, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        });
+        const ct = res.headers.get("content-type") || "";
+        if (!res.ok || !ct.includes("application/json")) {
+          setAiServerStatus("offline");
+          return;
+        }
+        const data = (await res.json()) as { ok?: boolean; aiConfigured?: boolean };
+        if (data.ok && data.aiConfigured) {
+          setAiServerStatus("ready");
+        } else if (data.ok) {
+          setAiServerStatus("missing_key");
+        } else {
+          setAiServerStatus("offline");
+        }
+      } catch {
+        setAiServerStatus("offline");
+      }
+    },
+    [aiEndpointBase, normalizeAiBase]
+  );
+
+  useEffect(() => {
+    refreshAiStatus();
+  }, [refreshAiStatus]);
+
+  const handleChangeAiEndpointBase = (nextUrl: string) => {
+    setAiEndpointBase(nextUrl);
+    try {
+      window.localStorage.setItem("reticula_ai_endpoint_base", nextUrl);
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   // Preview-before-confirm state
   const [previewSession, setPreviewSession] = useState<PreviewSession | null>(null);
@@ -323,6 +383,16 @@ export default function App() {
   const handleDeleteCustomFont = async (id: string) => {
     await deleteSavedCustomFont(id);
     setCustomFonts((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const handleChangeCustomFontCategory = async (
+    id: string,
+    category: FontFamilyGroup
+  ) => {
+    setCustomFonts((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, category } : f))
+    );
+    await updateSavedCustomFontCategory(id, category);
   };
 
   const handleApplyFontToSelected = (family: string) => {
@@ -608,8 +678,9 @@ export default function App() {
     }
 
     try {
+      const base = normalizeAiBase(aiEndpointBase);
       const { base64, mimeType } = await imageSrcToOptimizedBase64(docState.image.src);
-      const response = await fetch("/api/analyze-layout", {
+      const response = await fetch(`${base}/api/analyze-layout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -627,6 +698,8 @@ export default function App() {
             role: l.role,
             text: l.text,
           })),
+          customColors: customPalette?.colors ?? [],
+          foodFlyerPatterns: FOOD_FLYER_AI_SUMMARY,
         }),
       });
 
@@ -838,6 +911,7 @@ export default function App() {
             fonts={allFonts}
             onUploadFonts={handleUploadFonts}
             onDeleteCustomFont={handleDeleteCustomFont}
+            onChangeCustomFontCategory={handleChangeCustomFontCategory}
             onApplyFontToSelected={handleApplyFontToSelected}
             fontUploadError={fontUploadError}
             highlightFontsSection={topSection === "fonts"}
@@ -886,6 +960,10 @@ export default function App() {
             isAnalyzing={isAnalyzing}
             analysisError={analysisError}
             analysisResult={analysisResult}
+            aiServerStatus={aiServerStatus}
+            aiEndpointBase={aiEndpointBase}
+            onChangeAiEndpointBase={handleChangeAiEndpointBase}
+            onRefreshAiStatus={() => refreshAiStatus()}
             activePreviewId={previewSession?.proposalId}
             onExecuteRecommendation={handleExecuteRecommendation}
             onPreviewProposal={handlePreviewProposal}
@@ -946,6 +1024,7 @@ export default function App() {
                     fonts={allFonts}
                     onUploadFonts={handleUploadFonts}
                     onDeleteCustomFont={handleDeleteCustomFont}
+                    onChangeCustomFontCategory={handleChangeCustomFontCategory}
                     onApplyFontToSelected={handleApplyFontToSelected}
                     fontUploadError={fontUploadError}
                     customPalette={customPalette}
@@ -974,6 +1053,10 @@ export default function App() {
                     isAnalyzing={isAnalyzing}
                     analysisError={analysisError}
                     analysisResult={analysisResult}
+                    aiServerStatus={aiServerStatus}
+                    aiEndpointBase={aiEndpointBase}
+                    onChangeAiEndpointBase={handleChangeAiEndpointBase}
+                    onRefreshAiStatus={() => refreshAiStatus()}
                     activePreviewId={previewSession?.proposalId}
                     onExecuteRecommendation={handleExecuteRecommendation}
                     onPreviewProposal={handlePreviewProposal}

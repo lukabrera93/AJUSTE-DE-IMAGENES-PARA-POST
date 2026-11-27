@@ -1,9 +1,91 @@
-import type { FontAsset, StudioDocumentState, TextLayer } from "../types/studio";
+import type {
+  FontAsset,
+  FontFamilyGroup,
+  StudioDocumentState,
+  TextLayer,
+} from "../types/studio";
 import sampleArchImg from "../assets/images/sample_architecture_editorial_1795775734892.jpg";
 import sampleBotanicalImg from "../assets/images/sample_botanical_stilllife_1795775735335.jpg";
 import sampleNightImg from "../assets/images/sample_urban_night_story_1795775735593.jpg";
 
+export const FONT_FAMILY_GROUPS: {
+  id: FontFamilyGroup;
+  label: string;
+  shortLabel: string;
+  description: string;
+}[] = [
+  {
+    id: "display",
+    label: "Display / Impacto",
+    shortLabel: "Display",
+    description: "Titulares, promociones y ganchos visuales",
+  },
+  {
+    id: "serif",
+    label: "Serif / Editorial",
+    shortLabel: "Serif",
+    description: "Elegancia gastronómica, menús y estilo clásico",
+  },
+  {
+    id: "sans",
+    label: "Sans-Serif / Lectura",
+    shortLabel: "Sans-Serif",
+    description: "Subtítulos, ingredientes, precios y detalles",
+  },
+  {
+    id: "mono",
+    label: "Monoespaciada / Técnica",
+    shortLabel: "Mono",
+    description: "Horarios, etiquetas, direcciones y códigos",
+  },
+];
+
+export function resolveFontFamilyGroup(font: FontAsset): FontFamilyGroup {
+  if (
+    font.category === "display" ||
+    font.category === "serif" ||
+    font.category === "sans" ||
+    font.category === "mono"
+  ) {
+    return font.category;
+  }
+  return "display";
+}
+
+export function groupFontsByFamily(fonts: FontAsset[]): {
+  group: (typeof FONT_FAMILY_GROUPS)[number];
+  fonts: FontAsset[];
+}[] {
+  return FONT_FAMILY_GROUPS.map((group) => {
+    const items = fonts
+      .filter((f) => resolveFontFamilyGroup(f) === group.id)
+      .sort((a, b) => Number(b.isCustom) - Number(a.isCustom));
+    return { group, fonts: items };
+  }).filter((entry) => entry.fonts.length > 0);
+}
+
 export const BUILTIN_FONTS: FontAsset[] = [
+  {
+    id: "builtin-bebas",
+    name: "Bebas Neue",
+    family: '"Bebas Neue", sans-serif',
+    category: "display",
+    isCustom: false,
+  },
+  {
+    id: "builtin-oswald",
+    name: "Oswald",
+    family: '"Oswald", sans-serif',
+    category: "display",
+    isCustom: false,
+  },
+  {
+    id: "builtin-bricolage",
+    name: "Bricolage Grotesque",
+    family: '"Bricolage Grotesque", sans-serif',
+    category: "display",
+    isCustom: false,
+  },
   {
     id: "builtin-playfair",
     name: "Playfair Display",
@@ -19,10 +101,17 @@ export const BUILTIN_FONTS: FontAsset[] = [
     isCustom: false,
   },
   {
-    id: "builtin-bricolage",
-    name: "Bricolage Grotesque",
-    family: '"Bricolage Grotesque", sans-serif',
-    category: "display",
+    id: "builtin-lora",
+    name: "Lora",
+    family: '"Lora", Georgia, serif',
+    category: "serif",
+    isCustom: false,
+  },
+  {
+    id: "builtin-montserrat",
+    name: "Montserrat",
+    family: '"Montserrat", sans-serif',
+    category: "sans",
     isCustom: false,
   },
   {
@@ -33,24 +122,10 @@ export const BUILTIN_FONTS: FontAsset[] = [
     isCustom: false,
   },
   {
-    id: "builtin-oswald",
-    name: "Oswald",
-    family: '"Oswald", sans-serif',
-    category: "display",
-    isCustom: false,
-  },
-  {
     id: "builtin-dmsans",
     name: "DM Sans",
     family: '"DM Sans", sans-serif',
     category: "sans",
-    isCustom: false,
-  },
-  {
-    id: "builtin-lora",
-    name: "Lora",
-    family: '"Lora", Georgia, serif',
-    category: "serif",
     isCustom: false,
   },
   {

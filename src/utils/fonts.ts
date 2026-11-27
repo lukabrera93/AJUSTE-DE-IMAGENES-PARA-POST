@@ -1,4 +1,4 @@
-import type { FontAsset } from "../types/studio";
+import type { FontAsset, FontFamilyGroup } from "../types/studio";
 
 const DB_NAME = "reticula_studio_fonts_db";
 const STORE_NAME = "custom_fonts";
@@ -8,7 +8,22 @@ interface StoredFontRecord {
   name: string;
   fileName: string;
   formatLabel: string;
+  category?: FontFamilyGroup;
   buffer: ArrayBuffer;
+}
+
+export function inferFontCategory(name: string): FontFamilyGroup {
+  const lower = name.toLowerCase();
+  if (/(mono|code|courier|consolas|jetbrains|fira|terminal|typewriter)/.test(lower)) {
+    return "mono";
+  }
+  if (/(serif|garamond|playfair|bodoni|didot|times|lora|baskerville|georgia|caslon|merriweather|slab)/.test(lower)) {
+    return "serif";
+  }
+  if (/(sans|grotesk|jakarta|montserrat|inter|roboto|lato|poppins|dm\s|helvetica|arial|open\s|nunito|raleway|work\s)/.test(lower)) {
+    return "sans";
+  }
+  return "display";
 }
 
 function openFontDb(): Promise<IDBDatabase> {
@@ -64,6 +79,7 @@ export async function uploadCustomFontFile(file: File): Promise<FontAsset> {
   const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const name = cleanFontDisplayName(file.name) || "Fuente Personalizada";
   const formatLabel = getFormatLabel(file.name);
+  const category = inferFontCategory(name);
   const family = await registerFontBuffer(id, name, buffer);
 
   try {
@@ -75,6 +91,7 @@ export async function uploadCustomFontFile(file: File): Promise<FontAsset> {
       name,
       fileName: file.name,
       formatLabel,
+      category,
       buffer,
     };
     store.put(record);
@@ -86,7 +103,7 @@ export async function uploadCustomFontFile(file: File): Promise<FontAsset> {
     id,
     name,
     family,
-    category: "custom",
+    category,
     isCustom: true,
     fileName: file.name,
     formatLabel,
@@ -112,7 +129,7 @@ export async function loadSavedCustomFonts(): Promise<FontAsset[]> {
           id: rec.id,
           name: rec.name,
           family,
-          category: "custom",
+          category: rec.category || inferFontCategory(rec.name),
           isCustom: true,
           fileName: rec.fileName,
           formatLabel: rec.formatLabel,
@@ -124,6 +141,31 @@ export async function loadSavedCustomFonts(): Promise<FontAsset[]> {
     return loaded;
   } catch {
     return [];
+  }
+}
+
+export async function updateSavedCustomFontCategory(
+  id: string,
+  category: FontFamilyGroup
+): Promise<void> {
+  try {
+    const db = await openFontDb();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const record = getReq.result as StoredFontRecord | undefined;
+        if (record) {
+          record.category = category;
+          store.put(record);
+        }
+        resolve();
+      };
+      getReq.onerror = () => resolve();
+    });
+  } catch {
+    // Ignore
   }
 }
 

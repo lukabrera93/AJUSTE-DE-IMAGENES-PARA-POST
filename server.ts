@@ -30,6 +30,8 @@ interface AnalyzeRequestBody {
   aspectRatio?: "1080x1350" | "1080x1920";
   fonts?: AnalyzeFontInput[];
   textLayers?: AnalyzeLayerInput[];
+  customColors?: string[];
+  foodFlyerPatterns?: string;
 }
 
 function getAiClient(): GoogleGenAI {
@@ -51,14 +53,36 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: "25mb" }));
 
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (_req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
+
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true });
+    res.json({
+      ok: true,
+      aiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    });
   });
 
   app.post("/api/analyze-layout", async (req, res) => {
     try {
       const body = req.body as AnalyzeRequestBody;
-      const { imageBase64, mimeType, aspectRatio, fonts, textLayers } = body;
+      const {
+        imageBase64,
+        mimeType,
+        aspectRatio,
+        fonts,
+        textLayers,
+        customColors,
+        foodFlyerPatterns,
+      } = body;
 
       if (!imageBase64 || !mimeType) {
         res.status(400).json({
@@ -81,30 +105,40 @@ async function startServer() {
       const safeFonts = (fonts && fonts.length > 0 ? fonts : []).slice(0, 24);
       const customFonts = safeFonts.filter((f) => f.isCustom);
       const fontSummary = safeFonts
-        .map((f) => `- "${f.name}" (categoría: ${f.category}, origen: ${f.isCustom ? "SUBIDA POR EL USUARIO - PRIORIZAR" : "Estudio"})`)
+        .map((f) => `- "${f.name}" (familia: ${f.category}, origen: ${f.isCustom ? "SUBIDA POR EL USUARIO - PRIORIZAR" : "Estudio"})`)
         .join("\n");
 
       const layersSummary = textLayers
         .map((l) => `- id: "${l.id}", rol: "${l.role}", texto: "${l.text.slice(0, 220)}"`)
         .join("\n");
 
-      const systemInstruction = `Eres director de arte editorial para redes sociales (1080x1350 y 1080x1920).
+      const paletteNote =
+        customColors && customColors.length > 0
+          ? `\nPaleta de marca del usuario (úsalos prioritariamente si contrastan bien): ${customColors.join(", ")}`
+          : "";
+
+      const flyerDbNote = foodFlyerPatterns
+        ? `\nBase de patrones de flyers de comida en redes sociales:\n${foodFlyerPatterns}`
+        : "";
+
+      const systemInstruction = `Eres director de arte editorial y especialista en flyers gastronómicos para redes sociales (1080x1350 y 1080x1920).
 Analiza rápidamente la imagen: espacio negativo, contraste y sujeto principal.
 Reglas clave:
 1. En 1080x1920 evita el 14% superior y 18% inferior. En 1080x1350 respeta 6% de margen.
-2. Usa SOLO los nombres exactos de fuentes proporcionados. ${
+2. Usa SOLO los nombres exactos de fuentes proporcionados, respetando su familia (display para titulares, sans/serif para subtítulos, mono para detalles). ${
         customFonts.length > 0
           ? "PRIORIZA las fuentes marcadas como SUBIDA POR EL USUARIO."
           : "Combina con criterio las fuentes del estudio."
       }
-3. Sé muy breve (máximo 14 palabras por descripción) para responder rápido:
+3. Aprovecha los patrones probados de flyers de comida cuando apliquen (patrón Z, plano cenital, gourmet nocturno, promo rápida) sin tapar el plato.
+4. Sé muy breve (máximo 14 palabras por descripción) para responder rápido:
    - "recommendations": 3 recomendaciones concretas de estética limpia ejecutables.
    - "proposals": 2 composiciones completas bien diferenciadas.
-4. Coordenadas en porcentaje (0-100): x (6..58), y (6..84), widthPct (34..88, x+widthPct<=94), fontSize (base 1080px: título 58-108, subtítulo 26-40, etiqueta 20-26). Evita solapamientos y usa color hex de alto contraste.`;
+5. Coordenadas en porcentaje (0-100): x (6..58), y (6..84), widthPct (34..88, x+widthPct<=94), fontSize (base 1080px: título 58-108, subtítulo 26-40, etiqueta 20-26). Evita solapamientos y usa color hex de alto contraste.`;
 
       const promptText = `Formato: ${targetFormat}.
-Fuentes disponibles:
-${fontSummary}
+Fuentes disponibles agrupadas por familia:
+${fontSummary}${paletteNote}${flyerDbNote}
 
 Capas de texto:
 ${layersSummary}

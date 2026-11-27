@@ -6,11 +6,13 @@ export type TextAlign = "left" | "center" | "right";
 
 export type TextRole = "headline" | "subtitle" | "caption" | "custom";
 
+export type FontFamilyGroup = "display" | "serif" | "sans" | "mono";
+
 export interface FontAsset {
   id: string;
   name: string;
   family: string;
-  category: "serif" | "sans" | "display" | "mono" | "custom";
+  category: FontFamilyGroup | "custom";
   isCustom: boolean;
   fileName?: string;
   formatLabel?: string;
@@ -82,6 +84,7 @@ export interface AestheticRecommendation {
   title: string;
   description: string;
   category: "ubicacion" | "contraste" | "tipografia" | "respiracion";
+  patternSource?: string;
   recommendedScrim: ScrimType;
   scrimOpacity: number;
   placements: AIPlacement[];
@@ -91,6 +94,7 @@ export interface LayoutProposal {
   id: string;
   title: string;
   rationale: string;
+  patternSource?: string;
   recommendedScrim: ScrimType;
   scrimOpacity: number;
   placements: AIPlacement[];
