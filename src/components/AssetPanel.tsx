@@ -5,6 +5,7 @@ import {
   Lock,
   Palette,
   Plus,
+  Search,
   SlidersHorizontal,
   Trash2,
   Type,
@@ -22,6 +23,7 @@ import type {
 import { normalizeHexColor } from "../utils/palettes";
 import {
   FONT_FAMILY_GROUPS,
+  filterFontsByQuery,
   groupFontsByFamily,
   resolveFontFamilyGroup,
   SAMPLE_IMAGES,
@@ -85,13 +87,15 @@ export function AssetPanel({
   const [isDraggingFont, setIsDraggingFont] = useState(false);
   const [isDraggingPalette, setIsDraggingPalette] = useState(false);
   const [fontGroupFilter, setFontGroupFilter] = useState<"all" | FontFamilyGroup>("all");
+  const [fontSearch, setFontSearch] = useState("");
   const [hexInput, setHexInput] = useState("#D4A359");
   const [brokenSamples, setBrokenSamples] = useState<Record<string, boolean>>({});
 
   const isLocked = Boolean(image.locked);
   const customFonts = fonts.filter((f) => f.isCustom);
   const builtinFonts = fonts.filter((f) => !f.isCustom);
-  const groupedFonts = groupFontsByFamily(fonts).filter(
+  const matchingFonts = filterFontsByQuery(fonts, fontSearch);
+  const groupedFonts = groupFontsByFamily(matchingFonts).filter(
     (entry) => fontGroupFilter === "all" || entry.group.id === fontGroupFilter
   );
 
@@ -538,6 +542,29 @@ export function AssetPanel({
           </p>
         )}
 
+        {/* Live Font Search */}
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="search"
+            value={fontSearch}
+            onChange={(e) => setFontSearch(e.target.value)}
+            placeholder="Buscar fuente por nombre o estilo..."
+            aria-label="Buscar fuente en biblioteca"
+            className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#161A22] pl-8 pr-7 py-1.5 text-xs text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+          {fontSearch && (
+            <button
+              type="button"
+              onClick={() => setFontSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer"
+              aria-label="Limpiar búsqueda de fuente"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
         {/* Family Group Filter */}
         <div className="flex items-center gap-1 p-1 rounded-lg bg-neutral-100 dark:bg-[#161A22] overflow-x-auto">
           <button
@@ -569,7 +596,24 @@ export function AssetPanel({
 
         {/* Fonts Grouped by Family Type */}
         <div className="space-y-3">
-          {groupedFonts.map(({ group, fonts: familyFonts }) => (
+          {groupedFonts.length === 0 ? (
+            <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-[#161A22] p-3 text-center space-y-2">
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                No se encontraron fuentes con ese criterio.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setFontSearch("");
+                  setFontGroupFilter("all");
+                }}
+                className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                Mostrar todas las fuentes
+              </button>
+            </div>
+          ) : (
+            groupedFonts.map(({ group, fonts: familyFonts }) => (
             <div key={group.id} className="space-y-1.5">
               <div className="flex items-baseline justify-between gap-2 pt-1">
                 <span className="text-[11px] font-semibold text-neutral-800 dark:text-neutral-200">
@@ -638,7 +682,8 @@ export function AssetPanel({
                 ))}
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </section>
 

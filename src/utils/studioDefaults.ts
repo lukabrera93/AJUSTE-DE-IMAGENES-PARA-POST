@@ -71,6 +71,34 @@ export function groupFontsByFamily(fonts: FontAsset[]): {
   }).filter((entry) => entry.fonts.length > 0);
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+export function filterFontsByQuery(fonts: FontAsset[], query: string): FontAsset[] {
+  const q = normalizeSearchText(query);
+  if (!q) return fonts;
+  return fonts.filter((font) => {
+    const groupId = resolveFontFamilyGroup(font);
+    const groupMeta = FONT_FAMILY_GROUPS.find((g) => g.id === groupId);
+    const haystack = normalizeSearchText(
+      [
+        font.name,
+        groupMeta?.label || "",
+        groupMeta?.shortLabel || "",
+        groupMeta?.description || "",
+        font.isCustom ? "subida personalizada" : "estudio",
+        font.formatLabel || "",
+      ].join(" ")
+    );
+    return haystack.includes(q);
+  });
+}
+
 export const BUILTIN_FONTS: FontAsset[] = [
   {
     id: "builtin-bebas",

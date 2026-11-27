@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -5,26 +6,37 @@ import {
   ArrowLeft,
   ArrowRight,
   BookmarkPlus,
+  Check,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Eye,
   Play,
   Plus,
   Redo2,
+  Search,
   Trash2,
   Undo2,
   Wand2,
+  X,
 } from "lucide-react";
 import type {
   AestheticRecommendation,
   AnalysisResult,
   CustomPalette,
   FontAsset,
+  FontFamilyGroup,
   LayoutProposal,
   TextLayer,
   TextRole,
   VersionSnapshot,
 } from "../types/studio";
-import { groupFontsByFamily } from "../utils/studioDefaults";
+import {
+  FONT_FAMILY_GROUPS,
+  filterFontsByQuery,
+  groupFontsByFamily,
+  resolveFontFamilyGroup,
+} from "../utils/studioDefaults";
 
 export type InspectorTab = "ai" | "text" | "controls";
 
@@ -106,9 +118,28 @@ export function InspectorPanel({
   onPreviewVersion,
   onJumpToHistoryIndex,
 }: InspectorPanelProps) {
+  const [isFontPickerOpen, setIsFontPickerOpen] = useState(false);
+  const [fontSearch, setFontSearch] = useState("");
+  const [fontGroupFilter, setFontGroupFilter] = useState<"all" | FontFamilyGroup>("all");
+  const fontSearchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isFontPickerOpen) {
+      setTimeout(() => fontSearchInputRef.current?.focus(), 20);
+    }
+  }, [isFontPickerOpen]);
+
   const selectedLayer = layers.find((l) => l.id === selectedLayerId) || layers[0] || null;
   const customFonts = fonts.filter((f) => f.isCustom);
-  const groupedFontFamilies = groupFontsByFamily(fonts);
+  const activeFontAsset = selectedLayer
+    ? fonts.find((f) => f.family === selectedLayer.fontFamily) || null
+    : null;
+  const activeFontGroupMeta = activeFontAsset
+    ? FONT_FAMILY_GROUPS.find((g) => g.id === resolveFontFamilyGroup(activeFontAsset))
+    : null;
+  const filteredGroupedFonts = groupFontsByFamily(
+    filterFontsByQuery(fonts, fontSearch)
+  ).filter((entry) => fontGroupFilter === "all" || entry.group.id === fontGroupFilter);
   const palette = analysisResult?.paletteColors ?? [
     "#FFFFFF",
     "#141619",
@@ -468,30 +499,164 @@ export function InspectorPanel({
                   />
                 </label>
 
-                <label className="block space-y-1.5">
-                  <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-400">
-                    Tipografía
-                  </span>
-                  <select
-                    value={selectedLayer.fontFamily}
-                    onChange={(e) =>
-                      onUpdateLayer(selectedLayer.id, { fontFamily: e.target.value }, true)
-                    }
-                    className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#161A22] px-2.5 py-2 text-xs text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-neutral-600 dark:text-neutral-400">
+                    <span>Tipografía</span>
+                    {activeFontGroupMeta && (
+                      <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                        {activeFontGroupMeta.shortLabel}
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsFontPickerOpen((open) => !open)}
+                    aria-expanded={isFontPickerOpen}
+                    aria-label="Selector buscador de tipografía"
+                    className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#161A22] hover:border-blue-500/60 px-2.5 py-2 flex items-center justify-between gap-2 text-left transition-colors cursor-pointer"
                   >
-                    {groupedFontFamilies.map((entry) => (
-                      <optgroup key={entry.group.id} label={entry.group.label}>
-                        {entry.fonts.map((f) => (
-                          <option key={f.id} value={f.family}>
-                            {f.isCustom
-                              ? `${f.name} [Subida${f.formatLabel ? ` · ${f.formatLabel}` : ""}]`
-                              : f.name}
-                          </option>
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="text-sm text-neutral-900 dark:text-neutral-100 truncate"
+                        style={{ fontFamily: selectedLayer.fontFamily }}
+                      >
+                        {activeFontAsset?.name ||
+                          selectedLayer.fontFamily.replace(/["']/g, "").split(",")[0]}
+                      </div>
+                      <div className="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+                        {activeFontAsset?.isCustom
+                          ? `Subida · ${activeFontAsset.formatLabel || "FONT"}`
+                          : "Toca para buscar o cambiar"}
+                      </div>
+                    </div>
+                    {isFontPickerOpen ? (
+                      <ChevronUp className="w-4 h-4 text-neutral-400 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-neutral-400 shrink-0" />
+                    )}
+                  </button>
+
+                  {isFontPickerOpen && (
+                    <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-[#141820] p-2 space-y-2 shadow-sm">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          ref={fontSearchInputRef}
+                          type="search"
+                          value={fontSearch}
+                          onChange={(e) => setFontSearch(e.target.value)}
+                          placeholder="Buscar fuente (ej. Bodoni, Script, Oswald)..."
+                          aria-label="Buscar tipografía en editor"
+                          className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#111419] pl-8 pr-7 py-1.5 text-xs text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        />
+                        {fontSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setFontSearch("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 cursor-pointer"
+                            aria-label="Limpiar búsqueda de tipografía"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setFontGroupFilter("all")}
+                          className={`px-2 py-1 text-[10px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                            fontGroupFilter === "all"
+                              ? "bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-sm"
+                              : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200"
+                          }`}
+                        >
+                          Todas
+                        </button>
+                        {FONT_FAMILY_GROUPS.map((grp) => (
+                          <button
+                            key={grp.id}
+                            type="button"
+                            onClick={() => setFontGroupFilter(grp.id)}
+                            className={`px-2 py-1 text-[10px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                              fontGroupFilter === grp.id
+                                ? "bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-sm"
+                                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200"
+                            }`}
+                          >
+                            {grp.shortLabel}
+                          </button>
                         ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
+                      </div>
+
+                      <div className="max-h-[220px] overflow-y-auto space-y-2 pr-0.5">
+                        {filteredGroupedFonts.length === 0 ? (
+                          <div className="py-4 text-center space-y-1.5">
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                              No hay fuentes que coincidan.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFontSearch("");
+                                setFontGroupFilter("all");
+                              }}
+                              className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                            >
+                              Ver todas
+                            </button>
+                          </div>
+                        ) : (
+                          filteredGroupedFonts.map((entry) => (
+                            <div key={entry.group.id} className="space-y-1">
+                              <div className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 px-1 pt-0.5">
+                                {entry.group.label}
+                              </div>
+                              {entry.fonts.map((f) => {
+                                const isActive = f.family === selectedLayer.fontFamily;
+                                return (
+                                  <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => {
+                                      onUpdateLayer(
+                                        selectedLayer.id,
+                                        { fontFamily: f.family },
+                                        true
+                                      );
+                                      setIsFontPickerOpen(false);
+                                    }}
+                                    className={`w-full px-2.5 py-1.5 rounded-lg border text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                      isActive
+                                        ? "border-blue-600 bg-blue-600/10 text-blue-600 dark:text-blue-400"
+                                        : "border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#161A22] hover:border-neutral-300 dark:hover:border-neutral-700 text-neutral-900 dark:text-neutral-100"
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div
+                                        className="text-sm truncate"
+                                        style={{ fontFamily: f.family }}
+                                      >
+                                        {f.name}
+                                      </div>
+                                      {f.isCustom && (
+                                        <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                                          Subida · {f.formatLabel || "FONT"}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {isActive && <Check className="w-3.5 h-3.5 shrink-0" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-2 gap-2.5">
                   <label className="space-y-1">
